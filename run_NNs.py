@@ -45,11 +45,13 @@ if __name__ == '__main__':
 
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
-    n_layers = np.int32(4) # Including input and output layer
+    n_layers = np.int32(5) # Including input and output layer
     n_classes = np.int32(2) # Size of output layer
-#    layer_sz = np.int32(2**8)
-    layer_sz = np.int32(2**2)
-    n_neurons = [layer_sz, layer_sz, layer_sz, n_classes]
+    layer_sz = np.int32(2**4)
+    n_inputs = np.int32(1)
+    input_sz = np.int32(16)
+    n_neurons = [input_sz, layer_sz, layer_sz, layer_sz, n_classes]
+
 
     # Generate weights
     weights = []
@@ -60,13 +62,13 @@ if __name__ == '__main__':
 #                       .astype(np.float32))
         weights.append(np.ones(shape=(n_post_layer, n_pre_layer))
                        .astype(np.float32))
+    weights_1d = np.hstack([x.flatten() for x in weights])
 
     # Generate inputs
-    n_inputs = np.int32(3)
     # random inputs
 #    inputs = np.random.normal(size=(n_neurons[0], n_inputs)).astype(np.float32)
-    # inputs = np.zeros(shape=(n_neurons[0], n_inputs)).astype(np.float32) # zero inputs
-    inputs = np.ones(shape=(n_neurons[0], n_inputs)).astype(np.float32) # one inputs
+#     inputs = np.zeros(shape=(n_neurons[0], n_inputs)).astype(np.float32) # zero inputs
+    inputs = 2 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
 
     output_serial = NN_serial.infer_np_serial(inputs,
                                     weights,
@@ -74,60 +76,66 @@ if __name__ == '__main__':
                                     n_classes,
                                     n_neurons)
     print(inputs)
-    print(weights)
+    print(len(weights))
     print(output_serial)
 
-    output_parallel = np.zeros_like(output_serial)
 
+#
+#
+#
+#
+#    # Pointer to counter that keeps track of how many computations were performed
+#    computation_count = np.zeros(1).astype(np.int32)
+    input_tmp = inputs
+    for layer_i in range(n_layers - 1):
+        # Transfer data to GPU format (4 is the number of bytes per float)
+        gpu_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, n_neurons[layer_i] * 4)
+        gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, weights[layer_i].size * 4)
+    #    gpu_output = cl.Buffer(context, cl.mem_flags.WRITE_ONLY, n_inputs * n_classes * 4)
+        gpu_output = cl.Buffer(context, cl.mem_flags.WRITE_ONLY, n_neurons[layer_i + 1] * 4)
+    #    gpu_computation_count = cl.Buffer(context, cl.mem_flags.READ_WRITE, 4)
+    #
+    #    # Probably get rid of this later
+    #    gpu_interm_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, inputs.size * 4)
+    #    gpu_tmp_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, inputs.size * 4)
+    #
+        program = cl.Program(context, open('NN_parallel.cl').read()).build(options='')
+    #
+        # Send to the device, non-blocking (WHAT IS BLOCKING?)
+        cl.enqueue_copy(queue, gpu_inputs, input_tmp, is_blocking=False)
+        cl.enqueue_copy(queue, gpu_weights, weights[layer_i], is_blocking=False)
+    #    computation_count[0] = 0
+    #    cl.enqueue_copy(queue, gpu_computation_count, computation_count, is_blocking=False)
+    #
+        # For now, plan for each workgroup processing one row of weights
+        local_size = (n_neurons[layer_i], 1)  # 64 pixels per work group
+        global_size = tuple([n_neurons[layer_i], n_neurons[layer_i + 1]])
+        print local_size
+        print global_size
 
-    weights_1d = np.hstack([x.flatten() for x in weights])
+        # Local memory large enough to store one row of weights
+        gpu_local_memory = cl.LocalMemory(4 * (2 * n_neurons[layer_i]))
+        gpu_summed_val = cl.LocalMemory(4 * n_neurons[layer_i])
 
-    # Pointer to counter that keeps track of how many computations were performed
-    computation_count = np.zeros(1).astype(np.int32)
-
-    # Transfer data to GPU format (4 is the number of bytes per float)
-    gpu_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, inputs.size * 4)
-    gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, weights_1d.size * 4)
-    gpu_output = cl.Buffer(context, cl.mem_flags.WRITE_ONLY, n_inputs * n_classes * 4)
-    gpu_computation_count = cl.Buffer(context, cl.mem_flags.READ_WRITE, 4)
-
-    # Probably get rid of this later
-    gpu_interm_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, inputs.size * 4)
-    gpu_tmp_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, inputs.size * 4)
-
-    program = cl.Program(context, open('NN_parallel.cl').read()).build(options='')
-
-    # Send to the device, non-blocking (WHAT IS BLOCKING?)
-    cl.enqueue_copy(queue, gpu_inputs, inputs, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
-    computation_count[0] = 0
-    cl.enqueue_copy(queue, gpu_computation_count, computation_count, is_blocking=False)
-
-    # For now, plan for each workgroup processing one row of weights
-    local_size = (64, 1)  # 64 pixels per work group
-    global_size = tuple([64, layer_sz])
-    print global_size
-    
-    # Local memory large enough to store one row of weights
-    gpu_local_memory = cl.LocalMemory(4 * layer_sz)
-
-    program.NN_gpu_naive(queue, global_size, local_size, gpu_inputs,
-                         gpu_weights, gpu_local_memory, gpu_output,
-                         gpu_interm_inputs, gpu_tmp_inputs,
-                         gpu_computation_count,
-                         n_inputs, n_layers, n_classes, layer_sz)
-
-    # What does blocking mean???
-    cl.enqueue_copy(queue, output_parallel, gpu_output, is_blocking=True)
-    print(output_parallel)
-
-    interm_inputs = np.zeros_like(inputs)
-    cl.enqueue_copy(queue, interm_inputs, gpu_interm_inputs, is_blocking=True)
-    print(interm_inputs)
-
-    cl.enqueue_copy(queue, computation_count,
-                    gpu_computation_count, is_blocking=True)
-    print(computation_count)
+        print([n_neurons[layer_i], n_neurons[layer_i + 1], weights[layer_i].size])
+        program.NN_gpu_naive(queue, global_size, local_size, gpu_inputs,
+                             gpu_weights, gpu_local_memory, gpu_summed_val,
+                             gpu_output, n_neurons[layer_i], n_neurons[layer_i + 1])
+                                          
+        # What does blocking mean???
+        output_parallel = np.zeros((n_neurons[layer_i + 1])).astype(np.float32)
+        print(output_parallel.shape)
+        cl.enqueue_copy(queue, output_parallel, gpu_output, is_blocking=True)
+        print(output_parallel)
+        input_tmp = output_parallel
+#
+#    interm_inputs = np.zeros_like(inputs)
+#    cl.enqueue_copy(queue, interm_inputs, gpu_interm_inputs, is_blocking=True)
+#    print(interm_inputs)
+#
+#    cl.enqueue_copy(queue, computation_count,
+#                    gpu_computation_count, is_blocking=True)
+#    print(computation_count)
 
 
 #    cl.enqueue_copy(queue, gpu_image_a, host_image, is_blocking=False)

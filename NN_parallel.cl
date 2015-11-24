@@ -18,17 +18,13 @@
 //}
 
 __kernel void
-NN_gpu_naive(__global __read_write float *inputs,
+NN_gpu_naive(__global __read_only float *inputs,
              __global __read_only float *weights,
-             __local int *buffer,
+              __local int *buffer,
+             __local float *summed_val,
              __global __write_only float *output,
-             __global __read_write float *interm_inputs,
-             __global __read_write float *tmp_inputs,
-             __global int *computation_count,
-             int n_inputs, int n_layers,
-             int n_classes, int layer_sz)
+             int n_neurons_prev, int n_neurons_next)
 {
-
     // Global position of output pixel
     const int gx = get_global_id(0);
     const int gy = get_global_id(1);
@@ -39,62 +35,84 @@ NN_gpu_naive(__global __read_write float *inputs,
 
     // 1D index of thread within our work-group
     const int idx_1D = ly * get_local_size(0) + lx;
-
-    // Read everything from global memory over and over (super-inefficient)
-    // Workgroup k gets kth column from weight matrix.
-//    (layer_sz * layer_sz)
-//    for (int layer_i = 0; layer_i < n_layers; layer_i++) {
-    int layer_i = 0;
-    while (layer_i < n_layers) {
-//    int layer_i = 0;
-//        while(*computation_count < layer_i * n_inputs * layer_sz) {
-//            // Hang out here until ready to move on to next layer
-//        }
-        if (lx < n_inputs || (layer_i == n_layers - 1 && gy < n_classes)) {
-            int summed_val = 0;
-            int elem_i = 0;
-            for (elem_i = 0; elem_i < layer_sz; elem_i++) {
-                // Each lx thread within workgroup processes input k.
-                // Each gy thread works on a different row of weights
-                summed_val += (inputs[elem_i * n_inputs + lx]
-                               * weights[layer_i * layer_sz * layer_sz
-                                         + gy * layer_sz + elem_i]);
-            }
-            interm_inputs[gy * n_inputs + lx] = summed_val;
-            atomic_inc(computation_count);
-            //    }
-            
-            
-            output[0] = get_global_size(0);
-            output[1] = get_global_size(1);
-            output[2] = get_local_size(0);
-            output[3] = lx * layer_sz;
-            output[4] = *computation_count;
-            output[5] = summed_val;
-            
-            // Switch the pointers
-            tmp_inputs = inputs;
-            inputs = interm_inputs;
-            interm_inputs = tmp_inputs;
-            
-            layer_i++;
-//            barrier(CLK_GLOBAL_MEM_FENCE);
+    
+    
+    summed_val[lx] += inputs[lx] * weights[n_neurons_prev * gy + lx];
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (lx == 0) {
+        int total = 0;
+        for (int val_i = 0; val_i < n_neurons_prev; val_i++) {
+            total += summed_val[val_i];
         }
+        output[gy] = rectify_unit(total);
     }
+
+    
+//    int elem_i = 0;
+//    for (elem_i = 0; elem_i < layer_sz; elem_i++) {
+//        // Each lx thread within workgroup processes input k.
+//        // Each gy thread works on a different row of weights
+//        summed_val += (inputs[elem_i * n_inputs + lx]
+//                       * weights[layer_i * layer_sz * layer_sz
+//                                 + gy * layer_sz + elem_i]);
+//    }
+//
+//    // Read everything from global memory over and over (super-inefficient)
+//    // Workgroup k gets kth column from weight matrix.
+////    (layer_sz * layer_sz)
+////    for (int layer_i = 0; layer_i < n_layers; layer_i++) {
+//    int layer_i = 0;
+//    while (layer_i < n_layers) {
+////    int layer_i = 0;
+////        while(*computation_count < layer_i * n_inputs * layer_sz) {
+////            // Hang out here until ready to move on to next layer
+////        }
+//        if (lx < n_inputs || (layer_i == n_layers - 1 && gy < n_classes)) {
+//            int summed_val = 0;
+//            int elem_i = 0;
+//            for (elem_i = 0; elem_i < layer_sz; elem_i++) {
+//                // Each lx thread within workgroup processes input k.
+//                // Each gy thread works on a different row of weights
+//                summed_val += (inputs[elem_i * n_inputs + lx]
+//                               * weights[layer_i * layer_sz * layer_sz
+//                                         + gy * layer_sz + elem_i]);
+//            }
+//            interm_inputs[gy * n_inputs + lx] = summed_val;
+//            atomic_inc(computation_count);
+//            //    }
+//            
+//            
+//            output[0] = get_global_size(0);
+//            output[1] = get_global_size(1);
+//            output[2] = get_local_size(0);
+//            output[3] = lx * layer_sz;
+//            output[4] = *computation_count;
+//            output[5] = summed_val;
+//            
+//            // Switch the pointers
+//            tmp_inputs = inputs;
+//            inputs = interm_inputs;
+//            interm_inputs = tmp_inputs;
+//            
+//            layer_i++;
+////            barrier(CLK_GLOBAL_MEM_FENCE);
+//        }
+//    }
 }
 
 
-//
-//int
-//get_clamped_value(__global __read_only int *labels,
-//                  int w, int h,
-//                  int x, int y)
-//{
-//    if ((x < 0) || (x >= w) || (y < 0) || (y >= h))
-//        return w * h;
-//    return labels[y * w + x];
-//}
-//
+
+int
+rectify_unit(int x)
+{
+    if (x < 0) {
+        return 0;
+    }else if (x >= 0) {
+        return x;
+    }
+}
+
 //__kernel void
 //propagate_labels(__global __read_write int *labels,
 //                 __global __write_only int *changed_flag,
