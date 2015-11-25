@@ -21,4 +21,3 @@ Run feed-forward DNN efficiently on GPU using multiple optimizations
 
 * Blocked Matrix Multiplication
    - efficient usage of local memories (avoid bank conflicts)
-   - 
