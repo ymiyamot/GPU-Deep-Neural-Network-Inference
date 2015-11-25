@@ -76,14 +76,11 @@ if __name__ == '__main__':
     inputs = 2 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
 
     ### Serial implementation of DNN ### 
-    output_serial = NN_serial.infer_np_serial(inputs,
-                                    weights,
-                                    n_layers,
-                                    n_classes,
-                                    n_neurons)
-    #print(inputs)
-    #print(len(weights))
-    #print(output_serial)
+    output_serial = NN_serial.naive_dnn_serial(inputs,
+                                               weights,
+                                               n_layers,
+                                               n_classes,
+                                               n_neurons)
     #################################### 
 
 
@@ -103,110 +100,27 @@ if __name__ == '__main__':
         # For now, plan for each workgroup processing one row of weights
         local_size = (n_neurons[layer_i], 1)  # 64 pixels per work group
         global_size = tuple([n_neurons[layer_i], n_neurons[layer_i + 1]])
-        print local_size
-        print global_size
 
         # Local memory large enough to store one row of weights
         #gpu_local_memory = cl.LocalMemory(4 * (2 * n_neurons[layer_i]))
         gpu_summed_val = cl.LocalMemory(4 * n_neurons[layer_i])
 
-        print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_start[layer_i]])
+        #print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_start[layer_i]])
         
         # Run Kernel on GPU
-        program.NN_gpu_naive(queue, global_size, local_size,
+        event = program.NN_gpu_naive(queue, global_size, local_size,
                              gpu_neurons,
                              gpu_weights,
                              gpu_summed_val,
                              n_neurons[layer_i],
                              weight_start[layer_i])
-                                          
+        event.wait()
+        seconds = (event.profile.end - event.profile.start) / 1e9
+        print("{} layer, {} seconds".format(layer_i, seconds))
     
     # Post-processing
     out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
     cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)
     output_parallel = out_neurons[:n_classes]
-    print out_neurons
-    print(output_parallel)
-
-#    interm_inputs = np.zeros_like(inputs)
-#    cl.enqueue_copy(queue, interm_inputs, gpu_interm_inputs, is_blocking=True)
-#    print(interm_inputs)
-#
-#    cl.enqueue_copy(queue, computation_count,
-#                    gpu_computation_count, is_blocking=True)
-#    print(computation_count)
-
-
-#    cl.enqueue_copy(queue, gpu_image_a, host_image, is_blocking=False)
-#    width = np.int32(host_image.shape[1])
-#    height = np.int32(host_image.shape[0])
-#    halo = np.int32(1)
-#
-#    # Create a local memory per working group that is
-#    # the size of an int (4 bytes) * (N+2) * (N+2), where N is the local_size
-#    buf_size = (np.int32(local_size[0] + 2 * halo), np.int32(local_size[1] + 2 * halo))
-#    gpu_local_memory = cl.LocalMemory(4 * buf_size[0] * buf_size[1])
-#
-#    # initialize labels
-#    program.initialize_labels(queue, global_size, local_size,
-#                              gpu_image, gpu_labels,
-#                              width, height)
-#
-#    # while not done, propagate labels
-#    itercount = 0
-#
-#    # Show the initial labels
-#    cl.enqueue_copy(queue, host_labels, gpu_labels, is_blocking=True)
-#    pylab.imshow(host_labels)
-#    pylab.title(itercount)
-#    pylab.colorbar()
-#    pylab.show()
-#
-##    cl.enqueue_copy(queue, gpu_done_flag, host_done_flag, is_blocking=False)
-##    prop_exec = program.propagate_labels(queue, global_size, local_size,
-##                                             gpu_labels, gpu_done_flag,
-##                                             gpu_local_memory,
-##                                             width, height,
-##                                             buf_size[0], buf_size[1],
-##                                             halo)
-#
-#    show_progress = True
-#    total_time = 0
-#
-#    while True:
-#        itercount += 1
-#        host_done_flag[0] = 0
-#        print 'iter', itercount
-#        cl.enqueue_copy(queue, gpu_done_flag, host_done_flag, is_blocking=False)
-#        prop_exec = program.propagate_labels(queue, global_size, local_size,
-#                                             gpu_labels, gpu_done_flag,
-#                                             gpu_local_memory,
-#                                             width, height,
-#                                             buf_size[0], buf_size[1],
-#                                             halo)
-#        prop_exec.wait()
-#        elapsed = 1e-6 * (prop_exec.profile.end - prop_exec.profile.start)
-#        total_time += elapsed
-#        # read back done flag, block until it gets here
-#        cl.enqueue_copy(queue, host_done_flag, gpu_done_flag, is_blocking=True)
-#        if host_done_flag[0] == 0:
-#            # no changes
-#            break
-#        # there were changes, so continue running
-#        print host_done_flag
-#        if itercount % 100 == 0 and show_progress:
-#            cl.enqueue_copy(queue, host_labels, gpu_labels, is_blocking=True)
-#            pylab.imshow(host_labels)
-#            pylab.title(itercount)
-#            pylab.show()
-#        if itercount % 10000 == 0:
-#            print 'Reached maximal number of iterations, aborting'
-#            sys.exit(0)
-#
-#    print('Finished after {} iterations, {} ms total, {} ms per iteration'.format(itercount, total_time, total_time / itercount))
-#    # Show final result
-#    cl.enqueue_copy(queue, host_labels, gpu_labels, is_blocking=True)
-#    print 'Found {} regions'.format(len(np.unique(host_labels)) - 1)
-#    pylab.imshow(host_labels)
-#    pylab.title(itercount)
-#    pylab.show()
+    print("Serial outputs (run on cpu) : {}".format(output_serial))
+    print("Parallel outputs (run on gpu) : {}".format(output_parallel))

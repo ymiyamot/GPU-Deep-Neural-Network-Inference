@@ -5,7 +5,11 @@ import numpy as np
 
 
 # Generate nonlinear activation function
-def nonlin_activation(x):
+def ReLU(x):
+    x[np.where( x < 0.0 )] = 0
+    return x
+
+def sigmoid(x):
     return 2 * np.exp(x) / (np.exp(x) + 1) - 1
 
 def softmax(x):
@@ -16,11 +20,19 @@ def softmax(x):
     return(out)
 
 # Propagate inputs through network
+def naive_dnn_serial(inputs, weights, n_layers, n_classes, n_neurons):
+    layer_inputs = inputs
+    for layer_i in range(n_layers - 1):
+        layer_inputs = ReLU(weights[layer_i].dot(layer_inputs))
+    output = layer_inputs
+    return(output.flatten())
+
+# Propagate inputs through network
 def infer_np_serial(inputs, weights, n_layers, n_classes, n_neurons):
     layer_inputs = inputs
     for layer_i in range(n_layers - 1):
         if layer_i != n_layers - 2:
-            layer_inputs = nonlin_activation(weights[layer_i].dot(layer_inputs))
+            layer_inputs = sigmoid(weights[layer_i].dot(layer_inputs))
         else:
             layer_inputs = softmax(weights[layer_i].dot(layer_inputs))
             output = layer_inputs

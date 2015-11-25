@@ -43,12 +43,22 @@ NN_gpu_naive(__global float *neurons,
         for (int val_i = 0; val_i < n_neurons_prev; val_i++) {
             total += summed_val[val_i];
         }
-        neurons[gy] = rectify_unit(total);
+        neurons[gy] = ReLU(total);
     }
 }
 
 int
-rectify_unit(int x)
+ReLU(int x)
+{
+    if (x < 0) {
+        return 0;
+    }else if (x >= 0) {
+        return x;
+    }
+}
+
+float
+softmax(int x)
 {
     if (x < 0) {
         return 0;
