@@ -9,6 +9,8 @@ Run feed-forward DNN efficiently on GPU using multiple optimizations
 * NN_parallel.cl : Kernel codes for parallel implementation of DNN
 * NN_serial.py : Serial implementation of DNN using numpy
 * run_NNs.py : Initilization and launch kernels
+* NN_naive.cl : Naive implementation of DNN (Our baseline)
+* run_DNNs.py : Initilization and launch kernels on GPU (new version)
 
 ## Optimizations
 * Naive GPU implementation of DNN
