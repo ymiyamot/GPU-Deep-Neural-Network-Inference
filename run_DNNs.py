@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     # Create a context with all the devices
     devices = platforms[0].get_devices()
-    context = cl.Context(devices)
+    context = cl.Context([devices[2]])
     print 'This context is associated with ', len(context.devices), 'devices'
 
     # Create a queue for transferring data and launching computations.
@@ -43,14 +43,14 @@ if __name__ == '__main__':
 
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
-    n_layers = np.int32(5) # Including input and output layer
+    n_layers = np.int32(3) # Including input and output layer
     n_inputs = np.int32(1)
-    input_sz = np.int32(8)
+    input_sz = np.int32(4)
     n_classes = np.int32(2) # Size of output layer
-    layer_sz = np.int32(2**4)
-    n_neurons = [input_sz, layer_sz, layer_sz, layer_sz, n_classes]
+    layer_sz = np.int32(2**2)
+    n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
 
-    ### Initlization ###
+    ### Initialization ###
     # Generate weights
     # weights_1d : All vectorized weights
     # weight_start : Start weight locations for each layer computation
@@ -71,9 +71,9 @@ if __name__ == '__main__':
 
     # Generate inputs
     # random inputs
-#    inputs = np.random.normal(size=(n_neurons[0], n_inputs)).astype(np.float32)
-#     inputs = np.zeros(shape=(n_neurons[0], n_inputs)).astype(np.float32) # zero inputs
-    inputs = 2 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
+    inputs = np.random.normal(size=(input_sz, n_inputs)).astype(np.float32)
+#    inputs = np.zeros(shape=(input_sz, n_inputs)).astype(np.float32) # zero inputs
+#    inputs = 3 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
 
     ### Serial implementation of DNN ### 
     output_serial = NN_serial.naive_dnn_serial(inputs,
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     # Offload Kernel on GPU
     program = cl.Program(context, open('NN_naive.cl').read()).build(options='')
     
-    # Send to the GPU, non-blocking (WHAT IS BLOCKING?)
+    # Send to the GPU, non-blocking
     cl.enqueue_copy(queue, gpu_neurons,  inputs, is_blocking=False)
     cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
 
@@ -117,7 +117,11 @@ if __name__ == '__main__':
         event.wait()
         seconds = (event.profile.end - event.profile.start) / 1e9
         print("{} layer, {} seconds".format(layer_i, seconds))
-    
+
+        out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
+        cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)
+        print("Intermediate outputs (run on gpu) : {}".format(out_neurons))
+
     # Post-processing
     out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
     cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)

@@ -23,7 +23,9 @@ def softmax(x):
 def naive_dnn_serial(inputs, weights, n_layers, n_classes, n_neurons):
     layer_inputs = inputs
     for layer_i in range(n_layers - 1):
-        layer_inputs = ReLU(weights[layer_i].dot(layer_inputs))
+#        layer_inputs = ReLU(weights[layer_i].dot(layer_inputs))
+        layer_inputs = weights[layer_i].dot(layer_inputs)
+        print(layer_inputs.reshape(layer_inputs.shape[0], ))
     output = layer_inputs
     return(output.flatten())
 
