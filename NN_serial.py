@@ -25,10 +25,10 @@ def naive_dnn_serial(inputs, weights, n_layers, n_classes, n_neurons):
     for layer_i in range(n_layers - 1):
 #        layer_inputs = ReLU(weights[layer_i].dot(layer_inputs))
         layer_inputs = weights[layer_i].dot(layer_inputs)
-        print(layer_inputs.reshape(layer_inputs.shape[0], ))
+#        print(layer_inputs.shape)
     output = layer_inputs
-    return(output.flatten())
-
+#    return(output.flatten())
+    return(output)
 # Propagate inputs through network
 def infer_np_serial(inputs, weights, n_layers, n_classes, n_neurons):
     layer_inputs = inputs

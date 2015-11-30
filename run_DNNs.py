@@ -43,9 +43,15 @@ if __name__ == '__main__':
 
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
+#    n_layers = np.int32(3) # Including input and output layer
+#    n_inputs = np.int32(100)
+#    input_sz = np.int32(28 * 28) # Basic MNIST data input size
+#    n_classes = np.int32(10) # Size of output layer
+#    layer_sz = np.int32(2**10)
+
     n_layers = np.int32(3) # Including input and output layer
-    n_inputs = np.int32(1)
-    input_sz = np.int32(4)
+    n_inputs = np.int32(2)
+    input_sz = np.int32(4) # Basic MNIST data input size
     n_classes = np.int32(2) # Size of output layer
     layer_sz = np.int32(2**2)
     n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
@@ -75,56 +81,73 @@ if __name__ == '__main__':
 #    inputs = np.zeros(shape=(input_sz, n_inputs)).astype(np.float32) # zero inputs
 #    inputs = 3 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
 
-    ### Serial implementation of DNN ### 
+    ### Serial implementation of DNN ###
+#    output_serial= []
+#    for input_i in range(n_inputs):
+#        output_serial.append(NN_serial.naive_dnn_serial(inputs[:, input_i],
+#                                                        weights,
+#                                                        n_layers,
+#                                                        n_classes,
+#                                                        n_neurons))
+#    print("Serial outputs (run on cpu) : \n{}".format(np.vstack(output_serial).T))
+
     output_serial = NN_serial.naive_dnn_serial(inputs,
                                                weights,
                                                n_layers,
                                                n_classes,
                                                n_neurons)
-    #################################### 
+    print("Serial outputs (run on cpu) : \n{}".format(output_serial))
+    ####################################
 
 
-    ### Parallel implementation of DNN ### 
-    # Transfer data to GPU format (4 is the number of bytes per float)
-    gpu_neurons = cl.Buffer(context, cl.mem_flags.READ_WRITE, max(n_neurons) * 4)
-    gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, (weights_1d.size) * 4)
-    
-    # Offload Kernel on GPU
-    program = cl.Program(context, open('NN_naive.cl').read()).build(options='')
-    
-    # Send to the GPU, non-blocking
-    cl.enqueue_copy(queue, gpu_neurons,  inputs, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
+    ### Parallel implementation of DNN ###
 
-    for layer_i in range(n_layers - 1):
-        # For now, plan for each workgroup processing one row of weights
-        local_size = (n_neurons[layer_i], 1)  # 64 pixels per work group
-        global_size = tuple([n_neurons[layer_i], n_neurons[layer_i + 1]])
-
-        # Local memory large enough to store one row of weights
-        #gpu_local_memory = cl.LocalMemory(4 * (2 * n_neurons[layer_i]))
-        gpu_summed_val = cl.LocalMemory(4 * n_neurons[layer_i])
-
-        #print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_start[layer_i]])
+    # To run multiple inputs in the naive version, we will run one input vector at a time.
+    mult_outputs = []
+    for input_i in range(n_inputs):
+        curr_input = inputs[:, input_i] # Take one input at a time
         
-        # Run Kernel on GPU
-        event = program.NN_gpu_naive(queue, global_size, local_size,
-                             gpu_neurons,
-                             gpu_weights,
-                             gpu_summed_val,
-                             n_neurons[layer_i],
-                             weight_start[layer_i])
-        event.wait()
-        seconds = (event.profile.end - event.profile.start) / 1e9
-        print("{} layer, {} seconds".format(layer_i, seconds))
+        # Transfer data to GPU format (4 is the number of bytes per float)
+        gpu_neurons = cl.Buffer(context, cl.mem_flags.READ_WRITE, max(n_neurons) * 4)
+        gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, (weights_1d.size) * 4)
+        
+        # Offload Kernel on GPU
+        program = cl.Program(context, open('NN_naive.cl').read()).build(options='')
+        
+        # Send to the GPU, non-blocking
+        cl.enqueue_copy(queue, gpu_neurons,  curr_input, is_blocking=False)
+        cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
 
+        for layer_i in range(n_layers - 1):
+            # For now, plan for each workgroup processing one row of weights
+            local_size = (n_neurons[layer_i], 1)  # 64 pixels per work group
+            global_size = tuple([n_neurons[layer_i], n_neurons[layer_i + 1]])
+
+            # Local memory large enough to store one row of weights
+            #gpu_local_memory = cl.LocalMemory(4 * (2 * n_neurons[layer_i]))
+            gpu_summed_val = cl.LocalMemory(4 * n_neurons[layer_i])
+
+            #print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_start[layer_i]])
+            
+            # Run Kernel on GPU
+            event = program.NN_gpu_naive(queue, global_size, local_size,
+                                 gpu_neurons,
+                                 gpu_weights,
+                                 gpu_summed_val,
+                                 n_neurons[layer_i],
+                                 weight_start[layer_i])
+            event.wait()
+            seconds = (event.profile.end - event.profile.start) / 1e9
+            print("{} layer, {} seconds".format(layer_i, seconds))
+
+#        out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
+#        cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)
+#        print("Intermediate outputs (run on gpu) : {}".format(out_neurons))
+
+        # Post-processing
         out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
         cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)
-        print("Intermediate outputs (run on gpu) : {}".format(out_neurons))
-
-    # Post-processing
-    out_neurons = np.zeros((max(n_neurons))).astype(np.float32)
-    cl.enqueue_copy(queue, out_neurons, gpu_neurons, is_blocking=True)
-    output_parallel = out_neurons[:n_classes]
-    print("Serial outputs (run on cpu) : {}".format(output_serial))
-    print("Parallel outputs (run on gpu) : {}".format(output_parallel))
+        output_parallel = out_neurons[:n_classes]
+        mult_outputs.append(output_parallel)
+    print("Serial outputs (run on cpu) : \n{}".format(output_serial))
+    print("Parallel outputs (run on gpu) : \n{}".format(np.vstack(mult_outputs).T))
