@@ -60,8 +60,8 @@ if __name__ == '__main__':
 
 # Simple inputs for debugging
     n_layers = np.int32(3) # Including input and output layer
-    n_inputs = np.int32(2**3)
-    input_sz = np.int32(2**3) # Basic MNIST data input size
+    n_inputs = np.int32(2**2)
+    input_sz = np.int32(2**2) # Basic MNIST data input size
     n_classes = np.int32(2**3) # Size of output layer
     layer_sz = np.int32(2**3)
     local_sz = 2**2
@@ -101,7 +101,6 @@ if __name__ == '__main__':
 #                       [-0.61446768,  0.59548354],
 #                       [ 0.30874914,  0.42244878]]).astype(np.float32)
 
-
 #    inputs = np.zeros(shape=(input_sz, n_inputs)).astype(np.float32) # zero inputs
 #    inputs = 3 * np.ones(shape=(input_sz, n_inputs)).astype(np.float32) # one inputs
 
@@ -123,17 +122,25 @@ if __name__ == '__main__':
     print("Serial outputs (run on cpu) : \n{}".format(output_serial))
     ####################################
 
+    print(np.zeros(3, dtype=cl_array.vec.float4).shape)
+    print(np.zeros(3, dtype=cl_array.vec.float4))
+    inputs_f4 = inputs.astype(cl_array.vec.float4)
+    print(inputs_f4.nbytes)
+    print(inputs_f4.shape)
+    weights_1d_f4 = weights_1d.astype(cl_array.vec.float4)
+
     # Allocate GPU variables (4 is the number of bytes per float)
     gpu_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, n_inputs * max(n_neurons) * 4)
     gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, (weights_1d.size) * 4)
     gpu_outputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, n_inputs * max(n_neurons) * 4)
 
     # Offload Kernel on GPU
-    program = cl.Program(context, open('NN_blocked.cl').read()).build(options='')
+    program = cl.Program(context, open('NN_vectortype.cl').read()).build(options='')
 
     # Send to the GPU, non-blocking (later, may need to load in chunks)
-    cl.enqueue_copy(queue, gpu_inputs,  inputs, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
+    print(inputs_f4)
+    cl.enqueue_copy(queue, gpu_inputs,  inputs_f4, is_blocking=False)
+    cl.enqueue_copy(queue, gpu_weights, weights_1d_f4, is_blocking=False)
 
     # Run kernel
     for layer_i in range(n_layers - 1):
@@ -150,7 +157,7 @@ if __name__ == '__main__':
         gpu_local_inputs = cl.LocalMemory(4 * local_sz**2)
         gpu_local_weights = cl.LocalMemory(4 * local_sz**2)
         
-        event = program.NN_gpu_blocked(queue, global_size, local_size,
+        event = program.NN_vectortype(queue, global_size, local_size,
                              gpu_inputs,
                              gpu_weights,
                              gpu_outputs,
