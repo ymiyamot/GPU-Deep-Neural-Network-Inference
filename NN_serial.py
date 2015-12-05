@@ -22,16 +22,16 @@ def softmax(x):
 # Propagate inputs through network
 def naive_dnn_serial(inputs, weights, n_layers, n_classes, n_neurons):
     layer_inputs = inputs
-    print(type(inputs[0]))
+#    print(type(inputs[0]))
     for layer_i in range(n_layers - 1):
 #        layer_inputs = ReLU(weights[layer_i].dot(layer_inputs))
         layer_inputs = weights[layer_i].dot(layer_inputs)
 #        print(layer_inputs.shape)
-        print(type(layer_inputs[0]))
+#        print(type(layer_inputs[0]))
     output = layer_inputs
 #    return(output.flatten())
 
-    print(type(output[0]))
+#    print(type(output[0]))
     return(output)
 # Propagate inputs through network
 def infer_np_serial(inputs, weights, n_layers, n_classes, n_neurons):

@@ -51,21 +51,21 @@ if __name__ == '__main__':
 #    layer_sz = np.int32(2**10)
 
 # Large inputs
-#    n_layers = np.int32(3) # Including input and output layer
-#    n_inputs = np.int32(2**3)
-#    input_sz = np.int32(2**5) # Basic MNIST data input size
-#    n_classes = np.int32(2**4) # Size of output layer
-#    layer_sz = np.int32(2**10)
-#    local_sz = 2**3
+#    n_layers = np.int32(2) # Including input and output layer
+#    n_inputs = np.int32(2**5)
+#    input_sz = np.int32(2**6) # Basic MNIST data input size
+#    n_classes = np.int32(2**6) # Size of output layer
+#    layer_sz = np.int32(2**6)
+#    local_sz = 2**5
 
 # Simple inputs for debugging
-    n_layers = np.int32(3) # Including input and output layer
+    n_layers = np.int32(2) # Including input and output layer
     n_inputs = np.int32(2**2)
-    input_sz = np.int32(2**2) # Basic MNIST data input size
+    input_sz = np.int32(2**3) # Basic MNIST data input size
     n_classes = np.int32(2**3) # Size of output layer
     layer_sz = np.int32(2**3)
     local_sz = 2**2
-    
+
 #    n_layers = np.int32(3) # Including input and output layer
 #    n_inputs = np.int32(2)
 #    input_sz = np.int32(4) # Basic MNIST data input size
@@ -76,20 +76,20 @@ if __name__ == '__main__':
     ### Initialization ###
     # Generate weights
     # weights_1d : All vectorized weights
-    # weight_start : Start weight locations for each layer computation
+    # weight_begin : Start weight locations for each layer computation
     weights = []
-    weight_start = []
+    weight_begin = []
     for layer_i in range(n_layers - 1):
         n_pre_layer = n_neurons[layer_i]
         n_post_layer = n_neurons[layer_i + 1]
-#        weights.append(np.random.normal(size=(n_post_layer, n_pre_layer))
-#                       .astype(np.float32))
-        weights.append(np.ones(shape=(n_post_layer, n_pre_layer))
+        weights.append(np.random.normal(size=(n_post_layer, n_pre_layer))
                        .astype(np.float32))
+#        weights.append(np.ones(shape=(n_post_layer, n_pre_layer))
+#                       .astype(np.float32))
         if layer_i == 0:
-            weight_start.append(np.int32(0))
+            weight_begin.append(np.int32(0))
         else:
-            weight_start.append(np.int32(weight_start[-1]+n_neurons[layer_i-1]*n_neurons[layer_i]))
+            weight_begin.append(np.int32(weight_begin[-1]+(n_neurons[layer_i-1]*n_neurons[layer_i])))
     weights_1d = np.hstack([x.flatten() for x in weights])
 
     # Generate inputs
@@ -122,12 +122,36 @@ if __name__ == '__main__':
     print("Serial outputs (run on cpu) : \n{}".format(output_serial))
     ####################################
 
-    print(np.zeros(3, dtype=cl_array.vec.float4).shape)
-    print(np.zeros(3, dtype=cl_array.vec.float4))
-    inputs_f4 = inputs.astype(cl_array.vec.float4)
-    print(inputs_f4.nbytes)
-    print(inputs_f4.shape)
-    weights_1d_f4 = weights_1d.astype(cl_array.vec.float4)
+    weight_begin_vectortype = [int(x / 4) for x in weight_begin]
+    print(weight_begin)
+    print(weight_begin_vectortype)
+    
+    # Transfer inputs and weights to vector_type format
+    # !!!!This needs to be able divide the input size!!!!
+    vector_type_n = 4
+
+    inputs_vec = np.zeros((inputs.shape[0], int(inputs.shape[1] / vector_type_n)),
+                   dtype=cl_array.vec.float4)
+    for input_y in range(inputs_vec.shape[0]):
+        for input_x in range(inputs_vec.shape[1]):
+            inputs_vec[input_y][input_x] = inputs[input_y,
+                                                  range(input_x * vector_type_n,
+                                                        (input_x + 1) * vector_type_n)]
+
+    weights_1d_vec = np.zeros(int(weights_1d.size / vector_type_n),
+                          dtype=cl_array.vec.float4)
+
+    weights_vectype = []
+    for layer_i in range(n_layers - 1):
+        cur_weights = np.zeros((n_neurons[layer_i + 1] / vector_type_n,
+                               n_neurons[layer_i])).astype(cl_array.vec.float4)
+        for colm_i in range(n_neurons[layer_i]):
+            for row_i in range(int(n_neurons[layer_i + 1] / vector_type_n)):
+                cur_weights[row_i, colm_i] = weights[layer_i][np.arange(vector_type_n)
+                                                               + vector_type_n * row_i, colm_i]
+        weights_vectype.append(cur_weights)
+    weights_vectype_1d = np.hstack([x.flatten() for x in weights_vectype])
+
 
     # Allocate GPU variables (4 is the number of bytes per float)
     gpu_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, n_inputs * max(n_neurons) * 4)
@@ -138,9 +162,8 @@ if __name__ == '__main__':
     program = cl.Program(context, open('NN_vectortype.cl').read()).build(options='')
 
     # Send to the GPU, non-blocking (later, may need to load in chunks)
-    print(inputs_f4)
-    cl.enqueue_copy(queue, gpu_inputs,  inputs_f4, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_1d_f4, is_blocking=False)
+    cl.enqueue_copy(queue, gpu_inputs,  inputs_vec, is_blocking=False)
+    cl.enqueue_copy(queue, gpu_weights, weights_vectype_1d, is_blocking=False)
 
     # Run kernel
     for layer_i in range(n_layers - 1):
@@ -153,11 +176,13 @@ if __name__ == '__main__':
         global_size = (n_inputs, n_neurons[layer_i + 1]) # TODO: WHAT IS THE DOWNSIDE OF HAVING TOO MANY WORKERS HERE?
         assert global_size[0] % local_sz == 0 and global_size[1] % local_sz == 0
         
+        print('localsize = {}'.format(local_sz))
+        print('globalsize = {}'.format(global_size))
         # Allocate local memory
         gpu_local_inputs = cl.LocalMemory(4 * local_sz**2)
         gpu_local_weights = cl.LocalMemory(4 * local_sz**2)
         
-        event = program.NN_vectortype(queue, global_size, local_size,
+        event = program.NN_gpu_vectortype(queue, global_size, local_size,
                              gpu_inputs,
                              gpu_weights,
                              gpu_outputs,
@@ -166,7 +191,7 @@ if __name__ == '__main__':
                              n_neurons[layer_i],
                              n_inputs,
                              n_neurons[layer_i + 1],
-                             weight_start[layer_i])
+                             weight_begin[layer_i])
         event.wait()
         seconds = (event.profile.end - event.profile.start) / 1e9
         print("{} layer, {} seconds".format(layer_i, seconds))
@@ -178,6 +203,8 @@ if __name__ == '__main__':
     cl.enqueue_copy(queue, out_neurons, gpu_outputs, is_blocking=True)
     output_parallel = out_neurons[:n_inputs * n_classes].reshape([n_classes, n_inputs])
     print(out_neurons)
+    print(inputs)
+    print(weights)
 #    print('Outputs match? {}'.format(np.allclose(output_serial.flatten(), out_neurons[:n_inputs * n_classes])))
 
 #    print(output_serial.shape)
@@ -215,7 +242,7 @@ if __name__ == '__main__':
 #            #gpu_local_memory = cl.LocalMemory(4 * (2 * n_neurons[layer_i]))
 #            gpu_summed_val = cl.LocalMemory(4 * n_neurons[layer_i])
 #
-#            #print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_start[layer_i]])
+#            #print([n_neurons[layer_i], n_neurons[layer_i + 1], weight_begin[layer_i]])
 #            
 #            # Run Kernel on GPU
 #            event = program.NN_gpu_naive(queue, global_size, local_size,
@@ -223,7 +250,7 @@ if __name__ == '__main__':
 #                                 gpu_weights,
 #                                 gpu_summed_val,
 #                                 n_neurons[layer_i],
-#                                 weight_start[layer_i])
+#                                 weight_begin[layer_i])
 #            event.wait()
 #            seconds = (event.profile.end - event.profile.start) / 1e9
 #            print("{} layer, {} seconds".format(layer_i, seconds))
@@ -241,11 +268,4 @@ if __name__ == '__main__':
 ##    print("Serial outputs (run on cpu) : \n{}".format(output_serial))
 ##    print("Parallel outputs (run on gpu) : \n{}".format(np.vstack(mult_outputs).T))
 #    print('Outputs match? {}'.format(np.allclose(output_serial, np.vstack(mult_outputs).T)))
-
-    print(inputs.astype(cl_array.vec.float16))
-    print(inputs.astype(cl_array.vec.float16).shape)
-    N = 3
-    test_data = np.zeros(N, dtype=cl_array.vec.float16)
-
-    print(test_data.nbytes)
 
