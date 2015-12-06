@@ -13,6 +13,7 @@ def round_up(global_size, group_size):
     return global_size + group_size - r
 
 if __name__ == '__main__':
+    ### GPU initialization ###
     # List our platforms
     platforms = cl.get_platforms()
     print 'The platforms detected are:'
@@ -44,33 +45,21 @@ if __name__ == '__main__':
 
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
-#    n_layers = np.int32(3) # Including input and output layer
-#    n_inputs = np.int32(256)
-#    input_sz = np.int32(128) # Basic MNIST data input size
-#    n_classes = np.int32(32) # Size of output layer
-#    layer_sz = np.int32(2**10)
+    # Large inputs for testing
+    #    n_layers = np.int32(4) # Including input and output layer
+    #    n_inputs = np.int32(2**5)
+    #    input_sz = np.int32(2**8) # Basic MNIST data input size
+    #    n_classes = np.int32(2**6) # Size of output layer
+    #    layer_sz = np.int32(2**6)
+    #    local_sz = 2**5
 
-# Large inputs
-#    n_layers = np.int32(3) # Including input and output layer
-#    n_inputs = np.int32(2**3)
-#    input_sz = np.int32(2**5) # Basic MNIST data input size
-#    n_classes = np.int32(2**4) # Size of output layer
-#    layer_sz = np.int32(2**10)
-#    local_sz = 2**3
-
-# Simple inputs for debugging
-    n_layers = np.int32(3) # Including input and output layer
-    n_inputs = np.int32(2**3)
+    # Simple inputs for debugging
+    n_layers = np.int32(2) # Including input and output layer
+    n_inputs = np.int32(2**2)
     input_sz = np.int32(2**3) # Basic MNIST data input size
     n_classes = np.int32(2**3) # Size of output layer
     layer_sz = np.int32(2**3)
     local_sz = 2**2
-    
-#    n_layers = np.int32(3) # Including input and output layer
-#    n_inputs = np.int32(2)
-#    input_sz = np.int32(4) # Basic MNIST data input size
-#    n_classes = np.int32(2) # Size of output layer
-#    layer_sz = np.int32(2**2)
     n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
 
     ### Initialization ###
@@ -235,10 +224,4 @@ if __name__ == '__main__':
 ##    print("Parallel outputs (run on gpu) : \n{}".format(np.vstack(mult_outputs).T))
 #    print('Outputs match? {}'.format(np.allclose(output_serial, np.vstack(mult_outputs).T)))
 
-    print(inputs.astype(cl_array.vec.float16))
-    print(inputs.astype(cl_array.vec.float16).shape)
-    N = 3
-    test_data = np.zeros(N, dtype=cl_array.vec.float16)
-
-    print(test_data.nbytes)
 

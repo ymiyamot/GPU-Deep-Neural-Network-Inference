@@ -1,5 +1,5 @@
 __kernel void
-NN_gpu_vectortype(__global float4 *inputs,
+NN_gpu_vectortype_forrollout(__global float4 *inputs,
              __global __read_only float *weights,
              __global __write_only float4 *outputs,
              __local float4 *local_inputs,
@@ -80,9 +80,21 @@ NN_gpu_vectortype(__global float4 *inputs,
         }
         barrier(CLK_LOCAL_MEM_FENCE);
 
-
-        for (int elem_i = 0; elem_i < lszx * vector_type; elem_i++) {
-            acc += local_weights[ly * lszx * vector_type + elem_i] * local_inputs[elem_i * lszx + lx];
+        // Original, before unrolling for loop
+//        for (int elem_i = 0; elem_i < lszx * vector_type; elem_i++) {
+//            acc += local_weights[ly * lszx * vector_type + elem_i] * local_inputs[elem_i * lszx + lx];
+//        }
+        
+        // This is assuming that vector_type = 4.
+        for (int elem_i = 0; elem_i < lszx; elem_i++) {
+            acc += local_weights[ly * lszx * vector_type + 4 * elem_i]
+            * local_inputs[(4 * elem_i) * lszx + lx];
+            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 1]
+            * local_inputs[(4 * elem_i + 1) * lszx + lx];
+            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 2]
+            * local_inputs[(4 * elem_i + 2) * lszx + lx];
+            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 3]
+            * local_inputs[(4 * elem_i + 3) * lszx + lx];
         }
         
 
