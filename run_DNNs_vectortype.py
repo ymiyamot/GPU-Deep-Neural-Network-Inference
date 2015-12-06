@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # Create a context with all the devices
     devices = platforms[0].get_devices()
-    context = cl.Context([devices[2]])
+    context = cl.Context(devices)
     print 'This context is associated with ', len(context.devices), 'devices'
 
     # Create a queue for transferring data and launching computations.
@@ -123,8 +123,8 @@ if __name__ == '__main__':
     ####################################
 
     weight_begin_vectortype = [int(x / 4) for x in weight_begin]
-    print(weight_begin)
-    print(weight_begin_vectortype)
+    #print(weight_begin)
+    #print(weight_begin_vectortype)
     
     # Transfer inputs and weights to vector_type format
     # !!!!This needs to be able divide the input size!!!!
@@ -163,12 +163,13 @@ if __name__ == '__main__':
 
     # Send to the GPU, non-blocking (later, may need to load in chunks)
     cl.enqueue_copy(queue, gpu_inputs,  inputs_vec, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_vectype_1d, is_blocking=False)
+    cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
+    #cl.enqueue_copy(queue, gpu_weights, weights_vectype_1d, is_blocking=False)
 
     # Run kernel
     for layer_i in range(n_layers - 1):
         # Set workgroup sizes and number of workers
-        local_size = (local_sz, local_sz)  # 64 pixels per work group
+        local_size = (local_sz, local_sz)
         
         # Assume that this is a multiple of local_sz
 
@@ -202,9 +203,22 @@ if __name__ == '__main__':
     out_neurons = np.zeros((n_inputs * max(n_neurons))).astype(np.float32)
     cl.enqueue_copy(queue, out_neurons, gpu_outputs, is_blocking=True)
     output_parallel = out_neurons[:n_inputs * n_classes].reshape([n_classes, n_inputs])
+    print(output_serial)
     print(out_neurons)
     print(inputs)
     print(weights)
+    #test_input = inputs[0:4,0:4]
+    #test_weights = weights[0][0:4,0:4]
+    #test_input = inputs[4:8,0:4]
+    #test_weights = weights[0][0:4,4:8]
+    #test_input = inputs
+    #test_weights = weights[0][0:4,0:8]
+    test_input = inputs
+    test_weights = weights[0][4:8,0:8]
+    acc = np.zeros(4)
+    for i in range(8):
+        acc += np.multiply(test_input[i,:],test_weights[:,i]) 
+    print acc
 #    print('Outputs match? {}'.format(np.allclose(output_serial.flatten(), out_neurons[:n_inputs * n_classes])))
 
 #    print(output_serial.shape)
