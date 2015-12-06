@@ -42,6 +42,7 @@ if __name__ == '__main__':
                             properties=cl.command_queue_properties.PROFILING_ENABLE)
     print 'The queue is using the device:', queue.device.name
 
+    np.random.seed(1);
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
 #    n_layers = np.int32(3) # Including input and output layer
@@ -50,7 +51,7 @@ if __name__ == '__main__':
 #    n_classes = np.int32(32) # Size of output layer
 #    layer_sz = np.int32(2**10)
 
-# Large inputs
+# Large inputs for testing
 #    n_layers = np.int32(2) # Including input and output layer
 #    n_inputs = np.int32(2**5)
 #    input_sz = np.int32(2**6) # Basic MNIST data input size
@@ -59,12 +60,12 @@ if __name__ == '__main__':
 #    local_sz = 2**5
 
 # Simple inputs for debugging
-    n_layers = np.int32(2) # Including input and output layer
-    n_inputs = np.int32(2**2)
-    input_sz = np.int32(2**3) # Basic MNIST data input size
-    n_classes = np.int32(2**3) # Size of output layer
-    layer_sz = np.int32(2**3)
-    local_sz = 2**2
+#    n_layers = np.int32(2) # Including input and output layer
+#    n_inputs = np.int32(2**2)
+#    input_sz = np.int32(2**3) # Basic MNIST data input size
+#    n_classes = np.int32(2**3) # Size of output layer
+#    layer_sz = np.int32(2**3)
+#    local_sz = 2**2
 
 #    n_layers = np.int32(3) # Including input and output layer
 #    n_inputs = np.int32(2)
@@ -91,6 +92,7 @@ if __name__ == '__main__':
         else:
             weight_begin.append(np.int32(weight_begin[-1]+(n_neurons[layer_i-1]*n_neurons[layer_i])))
     weights_1d = np.hstack([x.flatten() for x in weights])
+#    weights_1d_vec = weights_1d.astype(cl_array.vec.float4)
 
     # Generate inputs
     # random inputs
@@ -138,19 +140,19 @@ if __name__ == '__main__':
                                                   range(input_x * vector_type_n,
                                                         (input_x + 1) * vector_type_n)]
 
-    weights_1d_vec = np.zeros(int(weights_1d.size / vector_type_n),
-                          dtype=cl_array.vec.float4)
-
-    weights_vectype = []
-    for layer_i in range(n_layers - 1):
-        cur_weights = np.zeros((n_neurons[layer_i + 1] / vector_type_n,
-                               n_neurons[layer_i])).astype(cl_array.vec.float4)
-        for colm_i in range(n_neurons[layer_i]):
-            for row_i in range(int(n_neurons[layer_i + 1] / vector_type_n)):
-                cur_weights[row_i, colm_i] = weights[layer_i][np.arange(vector_type_n)
-                                                               + vector_type_n * row_i, colm_i]
-        weights_vectype.append(cur_weights)
-    weights_vectype_1d = np.hstack([x.flatten() for x in weights_vectype])
+# We are no longer using the float4s for the weights
+#    weights_1d_vec = np.zeros(int(weights_1d.size / vector_type_n),
+#                          dtype=cl_array.vec.float4)
+#    weights_vectype = []
+#    for layer_i in range(n_layers - 1):
+#        cur_weights = np.zeros((n_neurons[layer_i + 1] / vector_type_n,
+#                               n_neurons[layer_i])).astype(cl_array.vec.float4)
+#        for colm_i in range(n_neurons[layer_i]):
+#            for row_i in range(int(n_neurons[layer_i + 1] / vector_type_n)):
+#                cur_weights[row_i, colm_i] = weights[layer_i][np.arange(vector_type_n)
+#                                                               + vector_type_n * row_i, colm_i]
+#        weights_vectype.append(cur_weights)
+#    weights_vectype_1d = np.hstack([x.flatten() for x in weights_vectype])
 
 
     # Allocate GPU variables (4 is the number of bytes per float)
@@ -163,21 +165,22 @@ if __name__ == '__main__':
 
     # Send to the GPU, non-blocking (later, may need to load in chunks)
     cl.enqueue_copy(queue, gpu_inputs,  inputs_vec, is_blocking=False)
-    cl.enqueue_copy(queue, gpu_weights, weights_vectype_1d, is_blocking=False)
+    cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
 
     # Run kernel
     for layer_i in range(n_layers - 1):
         # Set workgroup sizes and number of workers
-        local_size = (local_sz, local_sz)  # 64 pixels per work group
+        local_size = (int(local_sz / vector_type_n), local_sz)  # 64 pixels per work group
         
         # Assume that this is a multiple of local_sz
 
         # !!!!!!!! GLOBAL SIZE SHOULD BE (X, Y), NOT (#ROWS, #COLUMNS) !!!!!!!!!
-        global_size = (n_inputs, n_neurons[layer_i + 1]) # TODO: WHAT IS THE DOWNSIDE OF HAVING TOO MANY WORKERS HERE?
-        assert global_size[0] % local_sz == 0 and global_size[1] % local_sz == 0
-        
-        print('localsize = {}'.format(local_sz))
+        global_size = (int(n_inputs / vector_type_n),
+                       n_neurons[layer_i + 1]) # TODO: WHAT IS THE DOWNSIDE OF HAVING TOO MANY WORKERS HERE?
+        print('localsize = {}'.format(local_size))
         print('globalsize = {}'.format(global_size))
+        assert global_size[0] % local_size[0] == 0 and global_size[1] % local_size[1] == 0
+        
         # Allocate local memory
         gpu_local_inputs = cl.LocalMemory(4 * local_sz**2)
         gpu_local_weights = cl.LocalMemory(4 * local_sz**2)
@@ -202,8 +205,11 @@ if __name__ == '__main__':
     out_neurons = np.zeros((n_inputs * max(n_neurons))).astype(np.float32)
     cl.enqueue_copy(queue, out_neurons, gpu_outputs, is_blocking=True)
     output_parallel = out_neurons[:n_inputs * n_classes].reshape([n_classes, n_inputs])
+    print('Outputs')
     print(out_neurons)
+    print('Inputs:')
     print(inputs)
+    print('Weights:')
     print(weights)
 #    print('Outputs match? {}'.format(np.allclose(output_serial.flatten(), out_neurons[:n_inputs * n_classes])))
 

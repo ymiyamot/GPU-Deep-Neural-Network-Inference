@@ -1,9 +1,9 @@
 __kernel void
 NN_gpu_vectortype(__global float4 *inputs,
-             __global __read_only float4 *weights,
+             __global __read_only float *weights,
              __global __write_only float4 *outputs,
              __local float4 *local_inputs,
-             __local float4 *local_weights,
+             __local float *local_weights,
              int n_prev,
              int n_inputs,
              int n_next,
@@ -22,15 +22,16 @@ NN_gpu_vectortype(__global float4 *inputs,
     const int lszx = get_local_size(0);
     const int lszy = get_local_size(1);
 
+
     // 1D index of thread within our work-group
-    const int idx_1D = ly * get_local_size(0) + lx;
-    
+    const int idx_1D = ly * lszx + lx;
+
     // Register for accumulator
     float4 acc = 0;
 
     // Identifier for which workgroup we are in
-    int wrkgrp_id_x = (gx / lszx);
-    int wrkgrp_id_y = (gy / lszy);
+    int wrkgrp_id_x = gx / lszx;
+    int wrkgrp_id_y = gy / lszy;
     
     
     // Each thread is assigned multiplications for one row of weights,
@@ -38,81 +39,87 @@ NN_gpu_vectortype(__global float4 *inputs,
 
     
     // Determine which tile we're working on
-    int total_tiles = n_prev / lszx;
+    int total_tiles = n_prev / (lszx * vector_type);
     
     for (int curr_tile_i = 0; curr_tile_i < total_tiles; curr_tile_i++) {
-        // iterate through tiles later with for loop
-        if (idx_1D < lszx) {
+        if (idx_1D < lszx * vector_type) {
             // Load tile of weights into local memory
-            for (int row_i = 0; row_i < lszy / vector_type; row_i++) {
-                int x = idx_1D + curr_tile_i * lszx;
-                int y = (wrkgrp_id_y * (lszy / vector_type) + row_i);
+            for (int row_i = 0; row_i < lszy; row_i++) {
+                int x = idx_1D + curr_tile_i * lszx * vector_type;
+                int y = (wrkgrp_id_y * lszy + row_i);
                 int ind = weight_begin + x + n_prev * y;
-                local_weights[idx_1D + row_i * lszx] = weights[ind];
                 
-                
-//                if (curr_tile_i == 1 & wrkgrp_id_y == 0 & wrkgrp_id_x == 0) {
-//                    outputs[idx_1D + row_i * lszx] = weights[ind];
-//                }
+                local_weights[idx_1D + row_i * lszx * vector_type] = weights[ind];
             }
+
             // Load tile of inputs into local memory
-            for (int colm_i = 0; colm_i < (lszx / vector_type); colm_i++) {
-                int x = (wrkgrp_id_x * (lszx / vector_type) + colm_i);
+            for (int colm_i = 0; colm_i < lszx; colm_i++) {
+                int x = (wrkgrp_id_x * lszx + colm_i);
                 int y = idx_1D + curr_tile_i * lszy;
                 int ind = x + (n_inputs / vector_type) * y;
-                local_inputs[idx_1D + colm_i * (lszx / vector_type)] = inputs[ind];
-                
-                if (idx_1D == 0 & curr_tile_i == 0 & wrkgrp_id_y == 0 & wrkgrp_id_x == 0) {
-                    //                    outputs[idx_1D + row_i * (lszx / vector_type)] = inputs[ind];
-                    outputs[idx_1D + row_i * (lszx / vector_type)] = row_i;
-                }
+
+                local_inputs[colm_i + idx_1D * lszx] = inputs[ind];
             }
-//            for (int row_i = 0; row_i < lszy; row_i++) {
-//                int x = idx_1D + wrkgrp_id_x * (lszx / vector_type);
-//                int y = row_i + curr_tile_i * lszy;
-//                int ind = x + (n_inputs / vector_type) * y;
-//                local_inputs[idx_1D + row_i * (lszx / vector_type)] = inputs[ind];
-//                
-//                if (idx_1D == 0 & curr_tile_i == 0 & wrkgrp_id_y == 0 & wrkgrp_id_x == 0) {
-////                    outputs[idx_1D + row_i * (lszx / vector_type)] = inputs[ind];
-//                    outputs[idx_1D + row_i * (lszx / vector_type)] = row_i;
+            
+//            // Print out all the local inputs
+//            if (curr_tile_i == 0
+//                & wrkgrp_id_x == 1
+//                & wrkgrp_id_y == 0) {
+//                for (int i = 0; i < 16; i++) {
+//                    outputs[i] = local_inputs[i];
 //                }
 //            }
-            
-
-            
-            
-
+//            // Print out all the local weights
+//            if (lx == 0 & ly == 0 & curr_tile_i == 0
+//                & wrkgrp_id_x == 0
+//                & wrkgrp_id_y == 0) {
+//    
+//                for (int i = 0; i < 16; i++) {
+//                    outputs[i][0] = local_weights[(4 * i)];
+//                    outputs[i][1] = local_weights[(4 * i) + 1];
+//                    outputs[i][2] = local_weights[(4 * i) + 2];
+//                    outputs[i][3] = local_weights[(4 * i) + 3];
+//                }
+//            }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
+
+
+        for (int elem_i = 0; elem_i < lszx * vector_type; elem_i++) {
+//            if (lx == 0 & ly == 0 & curr_tile_i == 1
+//                & wrkgrp_id_x == 0
+//                & wrkgrp_id_y == 1) {
+            acc += local_weights[ly * lszx * vector_type + elem_i] * local_inputs[elem_i * lszx + lx];
+//            }
+        }
         
-        for (int elem_i = 0; elem_i < (lszx/vector_type); elem_i++) {
-            if (lx == 2 & ly == 1 & curr_tile_i == 0
-                & wrkgrp_id_x == 0
-                & wrkgrp_id_y == 0) {
-                acc += local_weights[ly * lszx/vector_type + elem_i] * local_inputs[elem_i * lszx + lx];
-            }
-            if (elem_i == 0 & lx == 2 & ly == 1 & curr_tile_i == 0
-                & wrkgrp_id_x == 0
-                & wrkgrp_id_y == 0) {
-//                outputs[0] = local_weights[ly * lszx/vector_type + elem_i];
-//                outputs[1] = local_inputs[elem_i * lszx + lx];
-//                outputs[2] = elem_i * lszx + lx;
-            }
-        }
+//        if (lx == 0 & ly == 0 & curr_tile_i == 1
+//            & wrkgrp_id_x == 0
+//            & wrkgrp_id_y == 1) {
+//            outputs[0] = acc;
+//            
+//            //                outputs[1] = local_inputs[elem_i * lszx + lx];
+//            //                outputs[2] = local_weights[ly * lszx * vector_type + elem_i];
+//            //                outputs[3] = elem_i * lszx + lx;
+//            //                outputs[4] = local_inputs[0];
+//        }
+
+        // Synchronize the workers at this point, so that local memory
+        // doesn't get refreshed to something new before workers are done
+        // computing with it.
         barrier(CLK_LOCAL_MEM_FENCE);
 
-        if (lx == 2 & ly == 1 & wrkgrp_id_x == 0 & wrkgrp_id_y == 0) {
-            float out = 0;
-            for (int elem_i = 0; elem_i < vector_type; elem_i++) {
-                out += acc[elem_i];
-            }
+//        if (lx == 2 & ly == 1 & wrkgrp_id_x == 0 & wrkgrp_id_y == 0) {
+//            float out = 0;
+//            for (int elem_i = 0; elem_i < vector_type; elem_i++) {
+//                out += acc[elem_i];
+//            }
 //            outputs[4] = out;
-        }
+//        }
         
     }
-    
-//    outputs[gx + n_inputs * gy] = acc;
+
+    outputs[gx + n_inputs / vector_type * gy] = acc;
 
 }
 
