@@ -52,12 +52,12 @@ if __name__ == '__main__':
 #    layer_sz = np.int32(2**10)
 
 # Large inputs for testing
-#    n_layers = np.int32(2) # Including input and output layer
-#    n_inputs = np.int32(2**5)
-#    input_sz = np.int32(2**6) # Basic MNIST data input size
-#    n_classes = np.int32(2**6) # Size of output layer
-#    layer_sz = np.int32(2**6)
-#    local_sz = 2**5
+    n_layers = np.int32(2) # Including input and output layer
+    n_inputs = np.int32(2**5)
+    input_sz = np.int32(2**8) # Basic MNIST data input size
+    n_classes = np.int32(2**6) # Size of output layer
+    layer_sz = np.int32(2**6)
+    local_sz = 2**5
 
 # Simple inputs for debugging
 #    n_layers = np.int32(2) # Including input and output layer
