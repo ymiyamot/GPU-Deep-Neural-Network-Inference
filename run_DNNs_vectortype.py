@@ -42,7 +42,11 @@ if __name__ == '__main__':
                             properties=cl.command_queue_properties.PROFILING_ENABLE)
     print 'The queue is using the device:', queue.device.name
 
-#    np.random.seed(1);
+    r_seed = np.random.random_integers(1, 120)
+#    r_seed = 104
+    print('Seed is: {}'.format(r_seed))
+    np.random.seed(r_seed);
+
     ### Set up neural network parameters ###
     # Decide the parameters of the structure of the neural network
 #    n_layers = np.int32(3) # Including input and output layer
@@ -68,11 +72,11 @@ if __name__ == '__main__':
 #    local_sz = 2**2
 
 #    n_layers = np.int32(2) # Including input and output layer
-#    n_inputs = np.int32(2**4)
-#    input_sz = np.int32(2**5) # Basic MNIST data input size
+#    n_inputs = np.int32(2**5)
+#    input_sz = np.int32(2**8) # Basic MNIST data input size
 #    n_classes = np.int32(2**6) # Size of output layer
-#    layer_sz = np.int32(2**7)
-#    local_sz = 2**3
+#    layer_sz = np.int32(2**6)
+#    local_sz = 2**5
 
     n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
 
@@ -207,13 +211,14 @@ if __name__ == '__main__':
     out_neurons = np.zeros((n_inputs * max(n_neurons))).astype(np.float32)
     cl.enqueue_copy(queue, out_neurons, gpu_outputs, is_blocking=True)
     output_parallel = out_neurons[:n_inputs * n_classes].reshape([n_classes, n_inputs])
-    print('Outputs')
-    print(out_neurons)
+
+    print('Outputs (dim: {})'.format(output_parallel.shape))
+    print(output_parallel)
     print('Inputs:')
     print(inputs)
     print('Weights:')
     print(weights)
-    print('Serial output:')
+    print('Serial output (dim: {})'.format(output_serial.shape))
     print(output_serial)
 #    print('Outputs match? {}'.format(np.allclose(output_serial.flatten(), out_neurons[:n_inputs * n_classes])))
 
@@ -221,8 +226,14 @@ if __name__ == '__main__':
 #    print(output_parallel)
 #    print(output_parallel.shape)
 #    print("Parallel outputs (run on gpu) : \n{}".format(np.vstack(mult_outputs).T))
-#    print(100 * np.abs(output_serial - output_parallel) / np.abs(output_serial))
-    print('Outputs match? {}'.format(np.allclose(output_serial, output_parallel, rtol=1e-03)))
+#    print('Error sizes:')
+    error_perc = 100 * np.abs(output_serial - output_parallel) / np.abs(output_serial)
+    worst_ind = np.unravel_index(np.argmax(error_perc), output_parallel.shape)
+    print('Max error of {}% at {}'.format(error_perc[worst_ind], worst_ind))
+    print('Worst match: serial = {}, parallel = {}'.format(output_serial[worst_ind], output_parallel[worst_ind]))
+
+    
+    print('Outputs match? {}'.format(np.allclose(output_serial, output_parallel, rtol=1e-02, atol=1e-4)))
 
 #    ### Parallel implementation of DNN ###
 #
