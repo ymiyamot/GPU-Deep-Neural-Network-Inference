@@ -1,3 +1,10 @@
+
+float4
+sigmoid(float4 x)
+{
+    return(1 / (1 + exp(-x)));
+}
+
 __kernel void
 NN_gpu_vectortype(__global float4 *inputs,
              __global __read_only float *weights,
@@ -93,26 +100,7 @@ NN_gpu_vectortype(__global float4 *inputs,
         
     }
 
-    outputs[gx + n_inputs / vector_type * gy] = acc;
+    outputs[gx + n_inputs / vector_type * gy] = sigmoid(acc);
 
 }
 
-int
-ReLU(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
-}
-
-float
-softmax(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
-}

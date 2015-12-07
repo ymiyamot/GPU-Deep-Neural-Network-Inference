@@ -1,3 +1,9 @@
+float
+sigmoid(float x)
+{
+    return(1 / (1 + exp(-x)));
+}
+
 __kernel void
 NN_gpu_naive(__global float *neurons,
              __global __read_only float *weights,
@@ -28,26 +34,6 @@ NN_gpu_naive(__global float *neurons,
             total += summed_val[val_i];
         }
 //        neurons[gy] = ReLU(total);
-        neurons[gy] = total;
-    }
-}
-
-int
-ReLU(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
-}
-
-float
-softmax(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
+        neurons[gy] = sigmoid(total);
     }
 }

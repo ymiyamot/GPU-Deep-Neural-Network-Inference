@@ -1,3 +1,11 @@
+float
+sigmoid(float x)
+{
+    return(1 / (1 + exp(-x)));
+}
+
+
+
 __kernel void
 NN_gpu_blocked(__global float *inputs,
              __global __read_only float *weights,
@@ -64,26 +72,6 @@ NN_gpu_blocked(__global float *inputs,
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     
-    outputs[gx + n_inputs * gy] = acc;
+    outputs[gx + n_inputs * gy] = sigmoid(acc);
 
-}
-
-int
-ReLU(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
-}
-
-float
-softmax(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
 }

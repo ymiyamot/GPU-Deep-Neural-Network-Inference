@@ -1,3 +1,17 @@
+float4
+sigmoid(float4 x)
+{
+    return(1 / (1 + exp(-x)));
+}
+
+//float4
+//ReLU(float4 x)
+//{
+//    float ref = 0;
+//    float4 res = (x > ref) & x;
+//    return(res);
+//}
+
 __kernel void
 NN_gpu_vectortype_forrollout(__global float4 *inputs,
              __global __read_only float *weights,
@@ -27,7 +41,10 @@ NN_gpu_vectortype_forrollout(__global float4 *inputs,
     const int idx_1D = ly * lszx + lx;
 
     // Register for accumulator
-    float4 acc = 0;
+    float4 acc1 = 0;
+    float4 acc2 = 0;
+    float4 acc3 = 0;
+    float4 acc4 = 0;
 
     // Identifier for which workgroup we are in
     int wrkgrp_id_x = gx / lszx;
@@ -87,13 +104,13 @@ NN_gpu_vectortype_forrollout(__global float4 *inputs,
         
         // This is assuming that vector_type = 4.
         for (int elem_i = 0; elem_i < lszx; elem_i++) {
-            acc += local_weights[ly * lszx * vector_type + 4 * elem_i]
+            acc1 += local_weights[ly * lszx * vector_type + 4 * elem_i]
             * local_inputs[(4 * elem_i) * lszx + lx];
-            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 1]
+            acc2 += local_weights[ly * lszx * vector_type + 4 * elem_i + 1]
             * local_inputs[(4 * elem_i + 1) * lszx + lx];
-            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 2]
+            acc3 += local_weights[ly * lszx * vector_type + 4 * elem_i + 2]
             * local_inputs[(4 * elem_i + 2) * lszx + lx];
-            acc += local_weights[ly * lszx * vector_type + 4 * elem_i + 3]
+            acc4 += local_weights[ly * lszx * vector_type + 4 * elem_i + 3]
             * local_inputs[(4 * elem_i + 3) * lszx + lx];
         }
         
@@ -102,29 +119,8 @@ NN_gpu_vectortype_forrollout(__global float4 *inputs,
         // doesn't get refreshed to something new before workers are done
         // computing with it.
         barrier(CLK_LOCAL_MEM_FENCE);
-        
+
     }
+    outputs[gx + n_inputs / vector_type * gy] = sigmoid(acc1 + acc2 + acc3 + acc4);
 
-    outputs[gx + n_inputs / vector_type * gy] = acc;
-
-}
-
-int
-ReLU(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
-}
-
-float
-softmax(int x)
-{
-    if (x < 0) {
-        return 0;
-    }else if (x >= 0) {
-        return x;
-    }
 }
