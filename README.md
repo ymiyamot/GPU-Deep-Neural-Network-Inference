@@ -6,34 +6,56 @@ GPU-Deep-Neural-Network-Inference
 Run feed-forward DNN efficiently on GPU using multiple optimizations
 
 ## File Description
-* NN_parallel.cl : Kernel codes for parallel implementation of DNN
-* NN_serial.py : Serial implementation of DNN using numpy
-* run_NNs.py : Initilization and launch kernels
-* NN_naive.cl : Naive implementation of DNN (Our baseline)
-* run_DNNs.py : Initilization and launch kernels on GPU (new version)
-* run_DNNs.py : Initilization and launch kernels on GPU (new version)
+### python scripts
 
-## Optimizations
-* Naive GPU implementation of DNN
-   - Processed an input through the network at a time
-   - Matrix-vector multiplication implementation
+1) **run_single.py** : run a signle test
+    - arguments : 
+        - optim_type : optimization type applied
+            - **naive, block, vector, unroll**
+        - optim_param : optimization parameters
+            - Block size : [**2, 4, 8, 16**]
+            - Vector size : [**2, 4, 8, 16**]
+            - Unrolling factor : [**2, 4, 8, 16**]
+        - network_sz : neural network size
+            - **small** : 64 $$\times$$ 64 $$\times$$ 64 $$\times$$ 64 $$\times$$ 64
+            - **medium** :  64 $$\times$$ 256 $$\times$$ 256 $$\times$$ 256 $$\times$$ 64
+            - **large** :  64 $$\times$$ 1024 $$\times$$ 1024 $$\times$$ 1024 $$\times$$ 64
+        - n_inputs : the number of inputs
+    - Returns
+        - valid : check if parallel outputs match with serial results
+        - runtime : GPU runtime
+    - How to use\
+        **python run_single.py block 4 large 1024**\
+    ==> Run a signle test for **block** version with block size of **4** on **large** NNs with **1024** inputs.
+    
+- run_sweeps.py : Sweeps simulation
+    - arguments : 
+        - optim_type : same as run_single.py
+        - network_sz : same as run_single.py
+        - n_inputs : same as run_single.py
+        - iters : the number of iterations to get average runtime
+    - ex) python run_sweeps.py block large 1024 100\
+    ==> Do sweeps for **blocked** version on large NNs with 1024 inputs by changing block size [**2, 4, 8, 16**]
+    - results : generate reports
+        - In **./results/**, report files are generated
 
-* Multiple threads within a workgroup
-
-* Matrix Multiplication used to process a set of inputs at a time
-   - Naive version of GPU Matrix multiplication
-
-* Blocked Matrix Multiplication
-   - reuse already-fetched data from global memory (memory spatial and temporal locality)
-   - different block sizes
-
-* Vectorized Matrix Multiplication
-   - Intra-neuron multiplication
-	- a vector of multiple elements are multiplied and only an output generated with a thread
-   - Inter-neuron multilication 
-	- 
+### Opencl kernels
+* NN_naive.cl : GPU naive implementation
+    - __kernel void NN_gpu_naive
+* NN_blocked.cl : Blocked version of GPU implementation
+    - __kernel void NN_gpu_blocked
+* NN_vectortype.cl : Vectorized version of GPU implementation
+    - __kernel void NN_gpu_vector2 : vector size 2
+    - __kernel void NN_gpu_vector4 : vector size 4
+    - __kernel void NN_gpu_vector8 : vector size 8
+    - __kernel void NN_gpu_vector16 : vector size 16
  
-* Loop Unrolling
+* NN_vectortype_forrollout.cl : Unrolled version of GPU implementation
+    - __kernel void NN_gpu_rollout1 : unrolling factor 1 (unrolling not applied)
+    - __kernel void NN_gpu_rollout2 : unrolling factor 2
+    - __kernel void NN_gpu_rollout4 : unrolling factor 4
+    - __kernel void NN_gpu_rollout8 : unrolling factor 8
+    - __kernel void NN_gpu_rollout16 : unrolling factor 16
 
-* Bank conflicts
-
+## Analysis
+- [Analysis Writeups](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/analysis.md)
