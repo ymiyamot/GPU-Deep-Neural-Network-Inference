@@ -3,7 +3,7 @@ GPU-Deep-Neural-Network-Inference
 (Hyunkwang Lee, Yohsuke Miyamoto)
 
 ## Project Aim
-Run feed-forward DNN efficiently on GPU using multiple optimizations
+Run feed-forward DNN prediction efficiently on the GPU using multiple optimizations
 
 ## File Description
 ### python scripts
