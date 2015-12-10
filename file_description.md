@@ -1,7 +1,8 @@
 # File Description
-### python scripts
+### 1. python scripts
+---
 
-### 1) run_single.py : run a single test
+### a) run_single.py : run a single test
     * arguments : 
         - optim_type : optimization type applied
             - **naive, block, vector, unroll**
@@ -21,7 +22,7 @@
         **python run_single.py block 4 large 1024**
     ==> Run a signle test for **block** version with block size of **4** on **large** NNs with **1024** inputs.
     
-### 2) run_sweeps.py : Sweeps simulation
+### b) run_sweeps.py : Sweeps simulation
     * arguments : 
         - optim_type : same as run_single.py
         - network_sz : same as run_single.py
@@ -32,18 +33,19 @@
     * results : generate reports
         - In **./results/**, report files are generated
 
-### Opencl kernels
-### 1) NN_naive.cl : GPU naive implementation
+### 2. Opencl kernels
+---
+### a) NN_naive.cl : GPU naive implementation
     - __kernel void NN_gpu_naive
-### 2) NN_blocked.cl : Blocked version of GPU implementation
+### b) NN_blocked.cl : Blocked version of GPU implementation
     - __kernel void NN_gpu_blocked (Block size 4, 8, 16, 32)
-### 3) NN_vectortype.cl : Vectorized version of GPU implementation
+### c) NN_vectortype.cl : Vectorized version of GPU implementation
     - __kernel void NN_gpu_vector2 : vector size 2
     - __kernel void NN_gpu_vector4 : vector size 4
     - __kernel void NN_gpu_vector8 : vector size 8
     - __kernel void NN_gpu_vector16 : vector size 16
  
-### 4) NN_vectortype_forrollout.cl : Unrolled version of GPU implementation
+### d) NN_vectortype_forrollout.cl : Unrolled version of GPU implementation
     - __kernel void NN_gpu_rollout2 : unrolling factor 2
     - __kernel void NN_gpu_rollout4 : unrolling factor 4
     - __kernel void NN_gpu_rollout8 : unrolling factor 8
