@@ -8,7 +8,7 @@ Run feed-forward DNN prediction efficiently on the GPU using multiple optimizati
 ## File Description
 ### python scripts
 
-- run_single.py : run a signle test
+- run_single.py : run a single test
     - arguments : 
         - optim_type : optimization type applied
             - **naive, block, vector, unroll**
