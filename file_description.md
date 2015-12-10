@@ -1,6 +1,5 @@
 # File Description
 ### 1. python scripts
----
 
 ### a) run_single.py : run a single test
     * arguments : 
@@ -34,7 +33,6 @@
         - In **./results/**, report files are generated
 
 ### 2. Opencl kernels
----
 ### a) NN_naive.cl : GPU naive implementation
     - __kernel void NN_gpu_naive
 ### b) NN_blocked.cl : Blocked version of GPU implementation
