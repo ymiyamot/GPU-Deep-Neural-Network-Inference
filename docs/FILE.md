@@ -2,7 +2,7 @@
 ### 1. python scripts
 
 ### a) run_single.py : run a single test
-    * arguments : 
+    - arguments : 
         - optim_type : optimization type applied
             - naive, blocked, vectorized, unrolled
         - optim_param : optimization parameters
@@ -14,22 +14,22 @@
             - medium :  64(input) x 256 x 256 x 256 x 64(output)
             - large :  64(input) x 1024 x 1024 x 1024 x 64(output)
         - n_inputs : the number of inputs
-    * Returns
+    - Returns
         - valid : check if parallel outputs match with serial results
         - runtime : GPU runtime
-    * How to use
+    - How to use
         python run_single.py blocked 4 large 1024
     ==> Run a signle test for blocked version with block size of 4 on large NNs with 1024 inputs.
     
 ### b) run_sweeps.py : Sweeps simulation
-    * arguments : 
+    - arguments : 
         - optim_type : same as run_single.py
         - network_sz : same as run_single.py
         - n_inputs : same as run_single.py
         - iters : the number of iterations to get average runtime
-    * ex) python run_sweeps.py blocked large 1024 100
+    - ex) python run_sweeps.py blocked large 1024 100
     ==> Do sweeps for blocked version on large NNs with 1024 inputs by changing block size [4, 8, 16, 32]
-    * results : generate reports
+    - results : generate reports
         - In ./results/, report files are generated
 
 ---
