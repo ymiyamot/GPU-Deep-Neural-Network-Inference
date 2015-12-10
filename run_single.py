@@ -29,7 +29,7 @@ def setup_gpu():
 
     # Create a context with all the devices
     devices = platforms[0].get_devices()
-    context = cl.Context(devices)
+    context = cl.Context([devices[2]])
     print 'This context is associated with ', len(context.devices), 'devices'
     
     # Create a queue for transferring data and launching computations.
@@ -105,7 +105,7 @@ def diagnose_performance(output_parallel, output_serial, print_extradeets_or_not
 
 
 ##### Function to run our naive implementation of the DNN #####
-def run_naive(context, queue, inputs, weights_1d, n_neurons, weight_begin):
+def run_naive(context, queue, inputs, weights_1d, n_neurons, weight_begin, n_inputs):
     # To run multiple inputs in the naive version, we will run one input vector at a time.
     mult_outputs = []
     layer_times = [] # Record how much time each layer takes
@@ -559,7 +559,8 @@ def main(optim_type, optim_param, network_sz, n_inputs):
                                                       inputs,
                                                       weights_1d,
                                                       n_neurons,
-                                                      weight_begin)
+                                                      weight_begin,
+                                                      n_inputs)
 
     elif optim_type == 'blocked':
         ########## Blocked implementation of DNN ##########

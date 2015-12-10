@@ -34,13 +34,13 @@ if __name__ == '__main__':
     valids_total = []
     # Do sweeps
     if optim_type == "naive":
-        valid_naive, runtime_naive = run_single.main(optim_type, optim_param, network_sz, n_inputs)
+        valid_naive, runtime_naive = run_single.main(optim_type, None, network_sz, n_inputs)
     else:
         for optim_param in sweep_confs:
             runtimes_single = []
             for iter in range(int(iters)):
                 print("[iter:%s] Start test [%s-sized NN, %s optimization, %s size %s]"\
-                   % (iter, str(network_sz), optim_type, optim_type, str(optim_param)))    
+                   % (iter, str(network_sz), optim_type, optim_type, str(optim_param)))
                 # Run a single test
                 print(optim_type, optim_param, network_sz, n_inputs)
                 valid, runtime = run_single.main(optim_type, optim_param, network_sz, n_inputs)
@@ -51,13 +51,21 @@ if __name__ == '__main__':
             valids_total.append(valid)
             runtimes_total.append(float(sum(runtimes_single))/float(len(runtimes_single)))
 
+
     # Write result reports
-    result_dir = cwd+"/results/"+str(opt)
+    result_dir = cwd+"/results/"+str(optim_type)
     if not os.path.isdir(result_dir):
         os.makedirs(result_dir)
-    
+
+    if network_sz == 'small':
+        N_ops = 33554432
+    elif network_sz == 'medium':
+        N_ops = 335544320
+    elif network_sz == 'large':
+        N_ops = 4563401752
+
     if optim_type == "naive":
-        summary_file = "%s_%s" % (opt,network_sz)
+        summary_file = "%s_%s" % (optim_type,network_sz)
         summary = open(result_dir+"/"+summary_file, 'w')
         summary.write("=======================\n")
         summary.write("      GPU Results      \n")
@@ -71,7 +79,7 @@ if __name__ == '__main__':
         summary.write("      GPU Results      \n")
         summary.write("=======================\n")
     else:
-        summary_file = "%s_%s" % (opt,network_sz)
+        summary_file = "%s_%s" % (optim_type,network_sz)
         summary = open(result_dir+"/"+summary_file, 'w')
         summary.write("=======================\n")
         summary.write("      GPU Results      \n")
@@ -80,11 +88,11 @@ if __name__ == '__main__':
         summary.write("Number of Inputs         : %s\n" % str(n_inputs))
         for i in range(len(runtimes_total)):
             summary.write("---- %s Size : %s ----   : \n" % (str(optim_type), str(sweep_confs[i])))
-            summary.write("Match with Serial?       : %s \n" % str(valid_total[i]))
+            summary.write("Match with Serial?       : %s \n" % str(valids_total[i]))
             summary.write("Runtime                  : %s sec\n" % str(runtimes_total[i]))
             summary.write("Performance              : %s GFLOPS\n" % str(N_ops/(runtimes_total[i]*1e9)))
         summary.write("=======================\n")
         summary.write("      GPU Results      \n")
         summary.write("=======================\n")
 
-    write.close()
+    summary.close()
