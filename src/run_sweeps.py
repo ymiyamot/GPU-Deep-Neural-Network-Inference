@@ -52,17 +52,18 @@ if __name__ == '__main__':
             runtimes_total.append(float(sum(runtimes_single))/float(len(runtimes_single)))
 
 
-    # Write result reports
-    result_dir = cwd+"/results/"+str(optim_type)
-    if not os.path.isdir(result_dir):
-        os.makedirs(result_dir)
-
+    # The number of float operations needed for each network size
     if network_sz == 'small':
         N_ops = 33554432
     elif network_sz == 'medium':
         N_ops = 335544320
     elif network_sz == 'large':
         N_ops = 4563401752
+
+    # Write result reports
+    result_dir = cwd+"/../results/"+str(optim_type)
+    if not os.path.isdir(result_dir):
+        os.makedirs(result_dir)
 
     if optim_type == "naive":
         summary_file = "%s_%s" % (optim_type,network_sz)
