@@ -58,4 +58,4 @@ Run feed-forward DNN efficiently on GPU using multiple optimizations
     - __kernel void NN_gpu_rollout16 : unrolling factor 16
 
 ## Analysis
-- [Analysis Writeups](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/analysis.md)
+- [Analysis Writeups](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/tree/master/ANALYSIS.md)
