@@ -34,11 +34,16 @@ We assume that loading a single float 4 from local memory uses a single bank (ra
 
 ---
 ### 3. Unrolling optimization (For-loop unrolling)
-In this unrolled optimization, we focused on the for loops that were being performed during the matrix multiplication.
-By performing multiple operations within each iteration of the for-loop and correspondingly decreasing the number of iterations.
-This has the benefit of decreasing the number of condition checks (checks performed after each iteration to determine whether to move to the next iteration).
-We varied the number of operations being performed within each loop iteration from 1 (no change from previous) to 2, to 4, 8, 16.
+In this unrolled optimization, we focused on "unrolling" the for loops that were being performed. "Unrolling" means that we make each worker will perform more operations within each iteration of the for-loop, for correspondingly fewer iterations. This has the benefit of decreasing the number of checks of loop conditions (i.e. checks performed to determine whether to move on to the next iteration). On the other hand, because there is a limited total number of registers that can be allocated, having each worker use too many registers may cause multiple workers to share the same registers, which may create waiting them.
+
 <img src="../Plots/Perf_vs_unrolling.png"/>
+
+In the plot above, we present the execution times resulting from varying the number of operations being performed within each loop (unrolling factor) from 1 (no unrolling) to 2, 4, 8, 16. It is obvious that after 4, the execution time dramatically increases, suggesting that the disadvantage of allocating too many registers to each worker quickly degrades performance. Based on the optimum of the plot above, we chose to use an unrolling factor of 4 as a result of this final optimization.
+
 ---
 ### 4. Summary of Results
+Below we show the progression of performance improvement through our stages of optimization. We achieved dramatic speed-up compared to our naive baseline implementation. However, a more meaningful basis of comparison might be to compare our performance results to theoretical peak performance. We calculated this peak performance of the GPU to be about 600 GFLOPs; thus, our best speed-ups here really only result in a sobering ~3% of what can theoretically be achieved.  Yet another meaningful basis of comparison might be the current cutting-edge performance resulting from cuBLAS, which is the high-performing linear algebra library built on CUDA, but we leave this to future work.
+
+
 <img src="../Plots/Perf_progression.png"/>
+
