@@ -51,7 +51,7 @@ def setup_inputs(input_sz, n_inputs, input_type, r_seed, mag):
         return(np.ones(shape=(input_sz, n_inputs)).astype(np.float32))
 
 ##### Function to generate weights of neural network #####
-def setup_weights(r_seed, mag):
+def setup_weights(r_seed, mag, n_neurons, n_layers):
     np.random.seed(r_seed);
     weights = []
     weight_begin = []
@@ -103,10 +103,12 @@ def diagnose_performance(output_parallel, output_serial, print_extradeets_or_not
 
 
 ##### Function to run our naive implementation of the DNN #####
-def run_naive(inputs, weights_1d):
+def run_naive(context, queue, inputs, weights_1d, n_neurons, weight_begin):
     # To run multiple inputs in the naive version, we will run one input vector at a time.
     mult_outputs = []
     layer_times = [] # Record how much time each layer takes
+    n_layers = len(n_neurons)
+    n_classes = n_neurons[-1]
     for input_i in range(n_inputs):
         curr_input = inputs[:, input_i].astype(np.float32) # Take one input at a time
         
@@ -122,7 +124,6 @@ def run_naive(inputs, weights_1d):
         cl.enqueue_copy(queue, gpu_in_neurons,  curr_input, is_blocking=False)
         cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
         
-
         for layer_i in range(n_layers - 1):
             # For now, plan for each workgroup processing one row of weights
             local_size = (n_neurons[layer_i], 1)  # 64 pixels per work group
@@ -168,7 +169,7 @@ def run_naive(inputs, weights_1d):
     return (np.vstack(mult_outputs).T, layer_times)
 
 ##### Function to run the blocked gpu implementation of the DNN #####
-def run_blocked(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin):
+def run_blocked(context, queue, inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin):
     # Allocate GPU variables (4 is the number of bytes per float)
     gpu_inputs = cl.Buffer(context, cl.mem_flags.READ_WRITE, n_inputs * max(n_neurons) * 4)
     gpu_weights = cl.Buffer(context, cl.mem_flags.READ_ONLY, (weights_1d.size) * 4)
@@ -180,9 +181,11 @@ def run_blocked(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin)
     # Send to the GPU, non-blocking (later, may need to load in chunks)
     cl.enqueue_copy(queue, gpu_inputs,  inputs, is_blocking=False)
     cl.enqueue_copy(queue, gpu_weights, weights_1d, is_blocking=False)
-    
+
     # Run kernel
     layer_times = []
+    n_layers = len(n_neurons)
+    n_classes = n_neurons[-1]
     for layer_i in range(n_layers - 1):
         # Set workgroup sizes and number of workers
         local_size = (local_sz, local_sz)  # 64 pixels per work group
@@ -224,11 +227,13 @@ def run_blocked(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin)
     return(output_parallel, layer_times)
 
 ##### Function to run the vectorized + blocked gpu implementation of the DNN #####
-def run_vectorized(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin, vector_type_n):
+def run_vectorized(context, queue, inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin, vector_type_n):
     
     # Transfer inputs and weights to vector_type format
     # !!!!This needs to be able divide the input size!!!!
-    if vector_type_n == 2:
+    if vector_type_n == 1:
+        inputs_vec = inputs
+    elif vector_type_n == 2:
         inputs_vec = np.zeros((inputs.shape[0], int(inputs.shape[1] / vector_type_n)),
                               dtype=cl_array.vec.float2)
     elif vector_type_n == 4:
@@ -261,6 +266,8 @@ def run_vectorized(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_beg
     
     # Run kernel
     layer_times = [] # Record how much time each layer takes
+    n_layers = len(n_neurons)
+    n_classes = n_neurons[-1]
     for layer_i in range(n_layers - 1):
         # Set workgroup sizes and number of workers
         local_size = (int(local_sz / vector_type_n), local_sz)  # 64 pixels per work group
@@ -270,8 +277,6 @@ def run_vectorized(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_beg
         # !!!!!!!! GLOBAL SIZE SHOULD BE (X, Y), NOT (#ROWS, #COLUMNS) !!!!!!!!!
         global_size = (int(n_inputs / vector_type_n),
                        n_neurons[layer_i + 1]) # TODO: WHAT IS THE DOWNSIDE OF HAVING TOO MANY WORKERS HERE?
-        print('localsize = {}'.format(local_size))
-        print('globalsize = {}'.format(global_size))
         assert global_size[0] % local_size[0] == 0 and global_size[1] % local_size[1] == 0
 
         # Allocate local memory
@@ -337,7 +342,7 @@ def run_vectorized(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_beg
 
 
 ##### Function to run the vectorized + blocked + forloop-rollout gpu implementation of the DNN #####
-def run_vectorized_rollout(inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin):
+def run_vectorized_rollout(context, queue, inputs, weights_1d, n_inputs, n_neurons, local_sz, weight_begin, rollout_num):
     
     # Transfer inputs and weights to vector_type format
     # !!!!This needs to be able divide the input size!!!!
@@ -366,6 +371,8 @@ def run_vectorized_rollout(inputs, weights_1d, n_inputs, n_neurons, local_sz, we
     
     # Run kernel
     layer_times = [] # Record how much time each layer takes
+    n_layers = len(n_neurons)
+    n_classes = n_neurons[-1]
     for layer_i in range(n_layers - 1):
         # Set workgroup sizes and number of workers
         local_size = (int(local_sz / vector_type_n), local_sz)  # 64 pixels per work group
@@ -383,16 +390,73 @@ def run_vectorized_rollout(inputs, weights_1d, n_inputs, n_neurons, local_sz, we
         gpu_local_inputs = cl.LocalMemory(4 * local_sz**2)
         gpu_local_weights = cl.LocalMemory(4 * local_sz**2)
 
-        event = program.NN_gpu_vectortype_forrollout4(queue, global_size, local_size,
-                                        gpu_inputs,
-                                        gpu_weights,
-                                        gpu_outputs,
-                                        gpu_local_inputs,
-                                        gpu_local_weights,
-                                        n_neurons[layer_i],
-                                        n_inputs,
-                                        n_neurons[layer_i + 1],
-                                        weight_begin[layer_i])
+        # Different factors of rollouts
+        if rollout_num == 1:
+            event = program.NN_gpu_rollout1(queue, global_size, local_size,
+                                            gpu_inputs,
+                                            gpu_weights,
+                                            gpu_outputs,
+                                            gpu_local_inputs,
+                                            gpu_local_weights,
+                                            n_neurons[layer_i],
+                                            n_inputs,
+                                            n_neurons[layer_i + 1],
+                                            weight_begin[layer_i])
+        elif rollout_num == 2:
+            event = program.NN_gpu_rollout2(queue, global_size, local_size,
+                                            gpu_inputs,
+                                            gpu_weights,
+                                            gpu_outputs,
+                                            gpu_local_inputs,
+                                            gpu_local_weights,
+                                            n_neurons[layer_i],
+                                            n_inputs,
+                                            n_neurons[layer_i + 1],
+                                            weight_begin[layer_i])
+        elif rollout_num == 4:
+            event = program.NN_gpu_rollout4(queue, global_size, local_size,
+                                            gpu_inputs,
+                                            gpu_weights,
+                                            gpu_outputs,
+                                            gpu_local_inputs,
+                                            gpu_local_weights,
+                                            n_neurons[layer_i],
+                                            n_inputs,
+                                            n_neurons[layer_i + 1],
+                                            weight_begin[layer_i])
+        elif rollout_num == 8:
+            event = program.NN_gpu_rollout8(queue, global_size, local_size,
+                                             gpu_inputs,
+                                             gpu_weights,
+                                             gpu_outputs,
+                                             gpu_local_inputs,
+                                             gpu_local_weights,
+                                             n_neurons[layer_i],
+                                             n_inputs,
+                                             n_neurons[layer_i + 1],
+                                             weight_begin[layer_i])
+        elif rollout_num == 16:
+            event = program.NN_gpu_rollout16(queue, global_size, local_size,
+                                            gpu_inputs,
+                                            gpu_weights,
+                                            gpu_outputs,
+                                            gpu_local_inputs,
+                                            gpu_local_weights,
+                                            n_neurons[layer_i],
+                                            n_inputs,
+                                            n_neurons[layer_i + 1],
+                                            weight_begin[layer_i])
+        elif rollout_num == 32:
+            event = program.NN_gpu_rollout32(queue, global_size, local_size,
+                                            gpu_inputs,
+                                            gpu_weights,
+                                            gpu_outputs,
+                                            gpu_local_inputs,
+                                            gpu_local_weights,
+                                            n_neurons[layer_i],
+                                            n_inputs,
+                                            n_neurons[layer_i + 1],
+                                            weight_begin[layer_i])
         event.wait()
         seconds = (event.profile.end - event.profile.start) / 1e9
 #        print("{} layer, {} seconds".format(layer_i, seconds))
@@ -408,153 +472,153 @@ def run_vectorized_rollout(inputs, weights_1d, n_inputs, n_neurons, local_sz, we
 
 
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
+def main(optim_type, optim_param, network_sz, n_inputs):
+    ########## Parse script arguments ##########
+    assert len(sys.argv) == 5, 'Need 5 arguments'
+    optim_type = sys.argv[1] # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
+    optim_param = np.int32(sys.argv[2]) # Parameter for the optimization
+    network_sz = sys.argv[3] # Size of network can be 'small', 'medium', or 'large'
+    n_inputs = np.int32(sys.argv[4]) # This should be a power of 2, typically use 1024
+
+    # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
+    # Parameter for the optimization
+    # Size of network can be 'small', 'medium', or 'large'
+    # This should be a power of 2, typically use 1024
     [queue, devices, context] = setup_gpu()
 
     r_seed = np.random.random_integers(1, 120)
-    r_seed = 109
-    print('Seed is: {}'.format(r_seed))
+#    r_seed = 109
+#    print('Seed is: {}'.format(r_seed))
     np.random.seed(r_seed);
+
 
     ########## Initialization ##########
     # Set up neural network parameters
     # Decide the parameters of the structure of the neural network
 
     layer_sz_list = [2**6, 2**8, 2**10]
-#    local_sz_list = [[2**0, 2**1, 2**2, 2**3, 2**4, 2**5],
-#                     [2**0, 2**1, 2**2, 2**3, 2**4, 2**5],
-#                     [2**2, 2**3, 2**4, 2**5]]
-    vector_type_n_list = [2, 4, 8, 16]
-    n_iter = 10 # times to average over performance measurements
+    if network_sz == 'small':
+        layer_sz = np.int32(2**6)
+    elif network_sz == 'medium':
+        layer_sz = np.int32(2**8)
+    elif network_sz == 'large':
+        layer_sz = np.int32(2**10)
+    else:
+        raise Exception('Invalid network size argument')
+
     all_perf_time = []
-#    for iter_i in range(n_iter):
-#        perf_time = []
-    for layer_sz_i in range(len(layer_sz_list)):
-#        for local_sz_i in range(len(local_sz_list[layer_sz_i])):
-        for vector_type_n_i in range(len(vector_type_n_list)):
-            print('Starting layer_sz: {}'.format(layer_sz_list[layer_sz_i]))
-            # Fixed the number of inputs at 256
-            n_layers = np.int32(5) # Including input and output layer
-            n_inputs = np.int32(2**10)
-            input_sz = np.int32(2**6)
-            n_classes = np.int32(2**6) # Size of output layer
-            layer_sz = np.int32(layer_sz_list[layer_sz_i])
-    #            local_sz = local_sz_list[layer_sz_i][local_sz_i]
-            local_sz = 2**4
-    #        vector_type_n = vector_type_n_list[vector_type_n_i]
-    #        print('Using float{}'.format(vector_type_n))
 
-            # Large inputs for testing
-        #    n_layers = np.int32(4) # Including input and output layer
-        #    n_inputs = np.int32(2**8)
-        #    input_sz = np.int32(2**10) # Basic MNIST data input size
-        #    n_classes = np.int32(2**5) # Size of output layer
-        #    layer_sz = np.int32(2**10)
-        #    local_sz = 2**5
+    # Fixed the number of inputs at 256
+    n_layers = np.int32(5) # Including input and output layer
+    input_sz = np.int32(2**6)
+    n_classes = np.int32(2**6) # Size of output layer
+    local_sz = 2**5
 
 
-        # Simple inputs for debugging
-        #    n_layers = np.int32(2) # Including input and output layer
-        #    n_inputs = np.int32(2**2)
-        #    input_sz = np.int32(2**3) # Basic MNIST data input size
-        #    n_classes = np.int32(2**3) # Size of output layer
-        #    layer_sz = np.int32(2**3)
-        #    local_sz = 2**2
+    # Generate inputs
+    inputs = setup_inputs(input_sz, n_inputs, 'random', r_seed, 1e-3) # random inputs
+    
+    # Number of neurons in each layer
+    n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
+    
+    # Generate weights
+    # weights: list where each element corresponds to a matrix of weights for one layer
+    # weights_1d : All vectorized weights
+    # weight_begin : Start weight locations for each layer computation
+    [weights, weights_1d, weight_begin] = setup_weights(r_seed, 1e-3, n_neurons, n_layers)
+    
 
-        #    n_layers = np.int32(3) # Including input and output layer
-        #    n_inputs = np.int32(2**3)
-        #    input_sz = np.int32(2**3) # Basic MNIST data input size
-        #    n_classes = np.int32(2**3) # Size of output layer
-        #    layer_sz = np.int32(2**8)
-        #    local_sz = 2**2
-
-            print('\n\n**************** DNN architecture: ****************')
-            print('# of layers: {} (including input and output layer)'.format(n_layers))
-            print('# of inputs: {}'.format(n_inputs))
-            print('Output classes: {}'.format(n_classes))
-            print('Input vector size: {}'.format(input_sz))
-            print('Layer sizes: {}'.format(layer_sz))
-            print('Local size:{}'.format(local_sz))
-            print('*******************************************************\n\n')
-            
-            
-
-        #    n_layers = np.int32(2) # Including input and output layer
-        #    n_inputs = np.int32(2**5)
-        #    input_sz = np.int32(2**8) # Basic MNIST data input size
-        #    n_classes = np.int32(2**6) # Size of output layer
-        #    layer_sz = np.int32(2**6)
-        #    local_sz = 2**5
-
-            n_neurons = [input_sz] + [layer_sz] * (n_layers - 2) + [n_classes]
+    
+    print('\n\n**************** DNN architecture: ****************')
+    print('# of layers: {} (including input and output layer)'.format(n_layers))
+    print('# of inputs: {}'.format(n_inputs))
+    print('Output classes: {}'.format(n_classes))
+    print('Input vector size: {}'.format(input_sz))
+    print('Layer sizes: {}'.format(layer_sz))
+    print('Local size: {}'.format(local_sz))
+    print('*******************************************************\n\n')
 
 
-            # Generate weights
-            # weights: list where each element corresponds to a matrix of weights for one layer
-            # weights_1d : All vectorized weights
-            # weight_begin : Start weight locations for each layer computation
-            [weights, weights_1d, weight_begin] = setup_weights(r_seed, 1e-3)
 
-            # Generate inputs
-            inputs = setup_inputs(input_sz, n_inputs, 'random', r_seed, 1e-3) # random inputs
+    ########## Serial implementation of DNN ##########
+    output_serial = NN_serial.naive_dnn_serial(inputs,
+                                               weights,
+                                               n_layers,
+                                               n_classes,
+                                               n_neurons)
 
-            ########## Serial implementation of DNN ##########
-            output_serial = NN_serial.naive_dnn_serial(inputs,
-                                                       weights,
-                                                       n_layers,
-                                                       n_classes,
-                                                       n_neurons)
-        #    print("Serial outputs (run on cpu) : \n{}".format(output_serial))
-            ####################################
 
-    #        ########## Naive implementation of DNN ##########
-    #        print('\n\n================== Executing Naive implementation ==================')
-    #        [output_naive, times_naive] = run_naive(inputs, weights_1d)
-    #    #    diagnose_performance(output_naive, output_serial, False)
-    #        print('Total time: {}'.format(sum(times_naive)))
-    #        diagnose_performance(output_naive, output_serial, False)
-    #
-    #        naive_perf.append(sum(times_naive))
+    if optim_type == 'naive':
+        ########## Naive implementation of DNN ##########
+        print('\n\n================== Executing Naive implementation ==================')
+        [output_parallel, times_parallel] = run_naive(context,
+                                                      queue,
+                                                      inputs,
+                                                      weights_1d,
+                                                      n_neurons,
+                                                      weight_begin)
 
-    #            ########## Vectorized + Blocked implementation of DNN ##########
-    #            print('\n\n================== Executing Blocked implementation ==================')
-    #            [output_blocked, times_blocked] = run_blocked(inputs,
-    #                                                          weights_1d,
-    #                                                          n_inputs,
-    #                                                          n_neurons,
-    #                                                          local_sz,
-    #                                                          weight_begin)
-    #            diagnose_performance(output_blocked, output_serial, False)
-    #            print('Total time: {}'.format(sum(times_blocked)))
-    ##            print('Improvement over naive: {}x'.format(sum(times_naive) / sum(times_blocked)))
-    #            perf_time.append(sum(times_blocked))
+    elif optim_type == 'blocked':
+        ########## Blocked implementation of DNN ##########
+        print('\n\n================== Executing Blocked implementation ==================')
+        
+        
+        local_sz = optim_param
+        assert local_sz in [2**2, 2**3, 2**4, 2**5],'Block size must be 2**2, 2**3, 2**4, or 2**5'
+        print('Block size parameter = {}'.format(local_sz))
+        [output_parallel, times_parallel] = run_blocked(context,
+                                                        queue,
+                                                        inputs,
+                                                      weights_1d,
+                                                      n_inputs,
+                                                      n_neurons,
+                                                      local_sz,
+                                                      weight_begin)
+    elif optim_type == 'vectorized':
+        ########## Vectorized + Blocked implementation of DNN ##########
+        print('\n\n================== Executing Vectorized implementation ==================')
+        
+        vector_type_n = optim_param
+        assert vector_type_n in [2, 4, 8, 16],'Vector type must be 2, 4, 8, 16'
+        print('Vector type parameter = {}'.format(vector_type_n))
+        [output_parallel, times_parallel] = run_vectorized(context,
+                                                           queue,
+                                                           inputs,
+                                                           weights_1d,
+                                                           n_inputs,
+                                                           n_neurons,
+                                                           local_sz,
+                                                           weight_begin,
+                                                           vector_type_n)
+    elif optim_type == 'unrolled':
+        ########## Vectorized + Blocked + loop-rollout implementation of DNN ##########
+        print('\n\n================== Executing Rollout implementation ==================')
+        rollout_num = optim_param
+        assert rollout_num in [1, 2, 4, 8, 16],'Rollout factor must be 1, 2, 4, 8, 16'
+        print('Rollout parameter = {}'.format(rollout_num))
+        [output_parallel, times_parallel] = run_vectorized_rollout(context,
+                                                                   queue,
+                                                                   inputs,
+                                                                 weights_1d,
+                                                                 n_inputs,
+                                                                 n_neurons,
+                                                                 local_sz,
+                                                                 weight_begin,
+                                                                 rollout_num)
 
-            ########## Vectorized + Blocked implementation of DNN ##########
-                    print('\n\n================== Executing Vectorized implementation ==================')
-                    [output_vectorized, times_vectorized] = run_vectorized(inputs,
-                                                                           weights_1d,
-                                                                           n_inputs,
-                                                                           n_neurons,
-                                                                           local_sz,
-                                                                           weight_begin,
-                                                                           vector_type_n)
-                    diagnose_performance(output_vectorized, output_serial, False)
-                    print('Total time: {}'.format(sum(times_vectorized)))
-                    perf_time.append(sum(times_vectorized))
-    #        print('Improvement over naive: {}x'.format(sum(times_naive) / sum(times_vectorized)))
+    else:
+        raise Exception('Invalid optimization type')
+    diagnose_performance(output_parallel, output_serial, False)
+    print('Total run time: {}'.format(sum(times_parallel)))
 
-    #        ########## Vectorized + Blocked + loop-rollout implementation of DNN ##########
-    #        print('\n\n================== Executing Rollout implementation ==================')
-    #        [output_rollout, times_rollout] = run_vectorized_rollout(inputs,
-    #                                                                 weights_1d,
-    #                                                                 n_inputs,
-    #                                                                 n_neurons,
-    #                                                                 local_sz,
-    #                                                                 weight_begin)
-    #        diagnose_performance(output_rollout, output_serial, False)
-    #        print('Total time: {}'.format(sum(times_rollout)))
-    #        print('Improvement over naive: {}x'.format(sum(times_naive) / sum(times_rollout)))
-            print(perf_time)
-    #        all_perf_time.append(perf_time)
-    #    print(all_perf_time)
+if __name__ == '__main__':
+    assert len(sys.argv) == 5, 'Need 5 arguments'
+    optim_type = sys.argv[1] # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
+    optim_param = np.int32(sys.argv[2]) # Parameter for the optimization
+    network_sz = sys.argv[3] # Size of network can be 'small', 'medium', or 'large'
+    n_inputs = np.int32(sys.argv[4]) # This should be a power of 2, typically use 1024
+    
+    print (optim_type, optim_param, network_sz, n_inputs)
+    main(optim_type, optim_param, network_sz, n_inputs)
 

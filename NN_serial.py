@@ -25,6 +25,6 @@ def naive_dnn_serial(inputs, weights, n_layers, n_classes, n_neurons):
     for layer_i in range(n_layers - 1):
         # Apply sigmoid after each layer except for output layer
         # (maybe eventually use softmax)
-        layer_inputs = sigmoid(weights[layer_i].dot(layer_inputs))
+        layer_inputs = weights[layer_i].dot(layer_inputs)
 
     return(layer_inputs)

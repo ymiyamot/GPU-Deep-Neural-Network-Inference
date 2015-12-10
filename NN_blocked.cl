@@ -7,7 +7,7 @@ sigmoid(float x)
 
 
 __kernel void
-NN_gpu_blocked(__global float *inputs,
+NN_gpu_blocked(__global __read_only float *inputs,
              __global __read_only float *weights,
              __global __write_only float *outputs,
              __local float *local_inputs,
@@ -72,6 +72,6 @@ NN_gpu_blocked(__global float *inputs,
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     
-    outputs[gx + n_inputs * gy] = sigmoid(acc);
+    outputs[gx + n_inputs * gy] = acc;
 
 }
