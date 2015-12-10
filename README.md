@@ -8,7 +8,7 @@ Run feed-forward DNN efficiently on GPU using multiple optimizations
 ## File Description
 ### python scripts
 
-1) **run_single.py** : run a signle test
+run_single.py : run a signle test
     - arguments : 
         - optim_type : optimization type applied
             - **naive, block, vector, unroll**
@@ -25,7 +25,7 @@ Run feed-forward DNN efficiently on GPU using multiple optimizations
         - valid : check if parallel outputs match with serial results
         - runtime : GPU runtime
     - How to use\
-        **python run_single.py block 4 large 1024**\
+        **python run_single.py block 4 large 1024**
     ==> Run a signle test for **block** version with block size of **4** on **large** NNs with **1024** inputs.
     
 - run_sweeps.py : Sweeps simulation
