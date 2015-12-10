@@ -3,7 +3,7 @@ GPU-Deep-Neural-Network-Inference
 (Hyunkwang Lee, Yohsuke Miyamoto)
 
 ## Project Aim
-The purpose of this project was to implement DNN prediction on the GPU using openCL, and perform several optimizations to speed up this operation. 
+The purpose of this project was to implement the prediction of deep neural networks on the GPU using openCL, and perform several optimizations to speed up this operation. 
 
 ## Background and motivation
 Deep neural networks (DNNs) have resurged in popularity in the past decades, and are consistently reported to yield cutting-edge performance in many fields of machine learning, such as image classification, voice recognition, natural language processing, and more.  Since neural network computations (essentially large matrix multiplications) are well-suited for parallelization, researchers often use GPUs, FPGAs, or clusters to speed up network training and prediction. Although there exist many high-performance cutting-edge software packages already implemented (such as cuBLAS to perform matrix multiplications), we chose to implement this process from scratch to understand for ourselves what aspects of parallelism can be exploited and where the bottlenecks of performance lie in neural networks.
