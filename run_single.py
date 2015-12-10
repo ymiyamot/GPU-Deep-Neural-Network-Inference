@@ -475,11 +475,11 @@ def run_vectorized_rollout(context, queue, inputs, weights_1d, n_inputs, n_neuro
 #if __name__ == '__main__':
 def main(optim_type, optim_param, network_sz, n_inputs):
     ########## Parse script arguments ##########
-    assert len(sys.argv) == 5, 'Need 5 arguments'
-    optim_type = sys.argv[1] # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
-    optim_param = np.int32(sys.argv[2]) # Parameter for the optimization
-    network_sz = sys.argv[3] # Size of network can be 'small', 'medium', or 'large'
-    n_inputs = np.int32(sys.argv[4]) # This should be a power of 2, typically use 1024
+#    assert len(sys.argv) == 5, 'Need 5 arguments'
+#    optim_type = sys.argv[1] # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
+#    optim_param = np.int32(sys.argv[2]) # Parameter for the optimization
+#    network_sz = sys.argv[3] # Size of network can be 'small', 'medium', or 'large'
+#    n_inputs = np.int32(sys.argv[4]) # This should be a power of 2, typically use 1024
 
     # Either 'Naive', 'Blocked', 'Vectorized', 'Unrolled'
     # Parameter for the optimization
