@@ -1,5 +1,4 @@
 # Analysis of GPU optimizations
-(Hyunkwang Lee, Yohsuke Miyamoto)
 
 ### Blocked optimization (decomposing matrix multiplication into multiplications of sub-blocks)
 In this blocked optimization, we divided up the weight matrix and input matrix into sub-matrices that were small enough to be stored in the local memory shared by each workgroup. In contrast, recall that the naive implementation performs the matrix multiplication by distributing to each worker one column of the inputs and one row of the weights .
