@@ -18,13 +18,13 @@ As a baseline comparison, we implemented a very basic version of the DNN on the 
 
 ---
 ### 1. Blocked optimization (decomposing matrix multiplication into multiplications of sub-blocks)
-In this blocked optimization, we divided up the weight matrix and input matrix into sub-matrices that were small enough to be stored in the local memory shared by each workgroup. In contrast, recall that the naive implementation performs the matrix multiplication by distributing to each worker one column of the inputs and one row of the weights .
-We thought that there might be a tradeoff between 
-We varied the size of the blocks from 1x1 to 32x32, square submatrices with row and column sizes being a power of 2.
-More efficient use of local memory because there is more overlapping data used between workers within a sub-block of matrix rather than a long row by column multiplication.
+In this blocked optimization, we divided up the weight matrix and input matrix into sub-matrices that were small enough to be stored in the local memory shared by each workgroup, where the size each workgroup was set to be the size of the sub-matrix. In contrast, recall that the naive implementation performs the matrix multiplication by distributing to each worker one column of the inputs and one row of the weights without utilizing local memory.
 
 <img src="../Plots/Perf_vs_blocksize.png"/>
-Here we see that the 
+
+We varied the size of the sub-matrices (workgroup size) from 1x1 to 32x32 (square submatrices with row and column sizes being a power of 2), as we thought that this workgroup size might induce a tradeoff between how much data can be reused across workers, and the number of banks available to access the local memory (as well as less memory allocatable to single workers). In the plot below, we show the effect of block size (x-axis) on the performance runtime (y-axis). The 3 panels (& colors) show results for the 3 different size networks. We see a consistent trend where larger block size decreases runtime, but this effect saturates quickly such that there is very little benefit between block sizes 16 and 32.We think that this saturation may be due to the number of banks available to access each workgroup's local memory. The number of banks available can be thought of as the number of channels through which workers can access local memory in parallel. We believe that at block sizes around 16 and 32, the disadvantage from the shortage of  banks outweights the advantage of reusing data across workers.
+less memory can be devoted to each worker.
+
 ---
 ### 2. Vectorized optimization (using vectortypes)
 In this vectorized optimization, we utilized vectortypes such as float 2, float4, float 8, float 16 to perform the neural network matrix multiplication. These vectortypes are variables that can store multiple 32-bit floats (e.g. float 8 stores 8 floats). Operations such as addition and multiplication act simultaneously on the multiple floats of a vector type variable. Thus, we thought we would be able to achieve considerable speed-up from using these vector types: ideally 4 times faster, for example, by using float4s.
