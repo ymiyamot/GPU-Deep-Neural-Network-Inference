@@ -10,6 +10,11 @@ Deep neural networks (DNNs) have resurged in popularity in the past decades, and
 
 Neural networks typically consist of 2 stages: (1) training on example data to tune their weights (learning) and (2) prediction using the trained configuration on new data (inference). For the scope of this project we choose to focus simply on step 2, the prediction step, in which we propagate the inputs through the neural network, given a set of configured weights. We focused on this component of DNN usage because DNN prediction can benefit greatly due to it being a recurring cost (in contrast to the one-time training of the network) and fast real-time predictions can be important in many applications. Furthermore, although many complex structures of DNNs exist (e.g. convolutional neural networks, recurrent neural networks) for simplicity, we focused on the simpler case of fully connected feed-forward networks.
 
+## Deep Neural Network
+- [DNN](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/tree/master/docs/DNN.md)
+
+## Methodology
+- [Methodology](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/tree/master/docs/METHODOLOGY.md)
 
 ## File Description
 - [File](https://github.com/ymiyamot/GPU-Deep-Neural-Network-Inference/tree/master/docs/FILE.md)
