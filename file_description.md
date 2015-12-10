@@ -32,6 +32,7 @@
     * results : generate reports
         - In **./results/**, report files are generated
 
+---
 ### 2. Opencl kernels
 ### a) NN_naive.cl : GPU naive implementation
     - __kernel void NN_gpu_naive
