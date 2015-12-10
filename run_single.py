@@ -612,7 +612,7 @@ def main(optim_type, optim_param, network_sz, n_inputs):
     else:
         raise Exception('Invalid optimization type')
     correctness = diagnose_performance(output_parallel, output_serial, False)
-    return (correctness, sum(times_parallel)))
+    return (correctness, sum(times_parallel))
     print('Total run time: {}'.format(sum(times_parallel)))
 
 if __name__ == '__main__':
