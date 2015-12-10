@@ -21,3 +21,6 @@ By performing multiple operations within each iteration of the for-loop and corr
 This has the benefit of decreasing the number of condition checks (checks performed after each iteration to determine whether to move to the next iteration).
 We varied the number of operations being performed within each loop iteration from 1 (no change from previous) to 2, to 4, 8, 16.
 <img src="./Plots/Perf_vs_unrolling.png"/>
+
+### Summary of Results
+<img src="./Plots/Perf_progression.png"/>
