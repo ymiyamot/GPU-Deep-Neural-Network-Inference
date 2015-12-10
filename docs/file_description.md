@@ -4,22 +4,22 @@
 ### a) run_single.py : run a single test
     * arguments : 
         - optim_type : optimization type applied
-            - **naive, block, vector, unroll**
+            - naive, blocked, vectorized, unrolled
         - optim_param : optimization parameters
-            - Block size : [**2, 4, 8, 16**]
-            - Vector size : [**2, 4, 8, 16**]
-            - Unrolling factor : [**2, 4, 8, 16**]
+            - Block size : [4, 8, 16, 32]
+            - Vector size : [2, 4, 8, 16]
+            - Unrolling factor : [2, 4, 8, 16]
         - network_sz : neural network size
-            - **small** : 64 x 64 x 64 x 64 x 64
-            - **medium** :  64 x 256 x 256 x 256 x 64
-            - **large** :  64 x 1024 x 1024 x 1024 x 64
+            - small : 64(input) x 64 x 64 x 64 x 64(output)
+            - medium :  64(input) x 256 x 256 x 256 x 64(output)
+            - large :  64(input) x 1024 x 1024 x 1024 x 64(output)
         - n_inputs : the number of inputs
     * Returns
         - valid : check if parallel outputs match with serial results
         - runtime : GPU runtime
-    * How to use\
-        **python run_single.py block 4 large 1024**
-    ==> Run a signle test for **block** version with block size of **4** on **large** NNs with **1024** inputs.
+    * How to use
+        python run_single.py blocked 4 large 1024
+    ==> Run a signle test for blocked version with block size of 4 on large NNs with 1024 inputs.
     
 ### b) run_sweeps.py : Sweeps simulation
     * arguments : 
@@ -27,10 +27,10 @@
         - network_sz : same as run_single.py
         - n_inputs : same as run_single.py
         - iters : the number of iterations to get average runtime
-    * ex) python run_sweeps.py block large 1024 100\
-    ==> Do sweeps for **blocked** version on large NNs with 1024 inputs by changing block size [**2, 4, 8, 16**]
+    * ex) python run_sweeps.py blocked large 1024 100
+    ==> Do sweeps for blocked version on large NNs with 1024 inputs by changing block size [4, 8, 16, 32]
     * results : generate reports
-        - In **./results/**, report files are generated
+        - In ./results/, report files are generated
 
 ---
 ### 2. Opencl kernels
