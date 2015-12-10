@@ -89,8 +89,10 @@ def diagnose_performance(output_parallel, output_serial, print_extradeets_or_not
     .format(output_serial[worst_ind],
             output_parallel[worst_ind]))
             
-    print('Outputs match? {}'.format(np.allclose(output_serial, output_parallel, rtol=0, atol=1e-6)))
-
+    correctness = np.allclose(output_serial, output_parallel, rtol=0, atol=1e-6)
+    print('Outputs match? {}'.format(correctness))
+    return(correctness)
+    
     if print_extradeets_or_not:
         print('Inputs:')
         print(inputs)
@@ -609,7 +611,8 @@ def main(optim_type, optim_param, network_sz, n_inputs):
 
     else:
         raise Exception('Invalid optimization type')
-    diagnose_performance(output_parallel, output_serial, False)
+    correctness = diagnose_performance(output_parallel, output_serial, False)
+    return (correctness, sum(times_parallel)))
     print('Total run time: {}'.format(sum(times_parallel)))
 
 if __name__ == '__main__':
